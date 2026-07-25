@@ -119,6 +119,10 @@ export function FindTab({
       .catch(() => {});
   }, []);
 
+  const [moonStake, setMoonStake] = useState(100);
+  const [moonMultiple, setMoonMultiple] = useState(300);
+  const [moonResult, setMoonResult] = useState<{ parlays: Parlay[]; targetAmerican: number } | null>(null);
+  const [moonLoading, setMoonLoading] = useState(false);
   const [seasonWeek, setSeasonWeek] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -275,6 +279,28 @@ export function FindTab({
 
   const weekGames = schedule.filter((g) => g.week === seasonWeek);
   const weeks = [...new Set(schedule.map((g) => g.week))].sort((a, b) => a - b);
+
+  async function runMoonshot() {
+    setMoonLoading(true);
+    try {
+      const res = await fetch("/api/moonshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stake: moonStake,
+          targetMultiple: moonMultiple,
+          adjustments,
+          decidedGames,
+          qbOverrides,
+          customBoard,
+        }),
+      });
+      const d = await res.json();
+      if (!d.error) setMoonResult(d);
+    } finally {
+      setMoonLoading(false);
+    }
+  }
 
   function copySlip(p: Parlay, i: number) {
     const lines = p.legs.map((l) => `  • ${l.label} (${fmtAmerican(l.americanOdds)})`);
@@ -513,6 +539,39 @@ export function FindTab({
           </div>
         </Card>
 
+        {/* Moonshot finder */}
+        <Card className="space-y-3 border-warn/30 p-4">
+          <SectionTitle>🚀 Moonshot finder</SectionTitle>
+          <p className="text-[11px] leading-relaxed text-ink-3">
+            The most-likely ticket (pure model, no anchor) that pays a giant multiple. It hunts
+            same-team ladders — division + conference + Super Bowl multiply the payout while the
+            real probability stays the deepest rung.
+          </p>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-ink-3">$</span>
+            <NumInput value={moonStake} min={1} max={100000} onChange={setMoonStake} />
+            <span className="text-ink-3">to win ≥</span>
+            <select
+              value={moonMultiple}
+              onChange={(e) => setMoonMultiple(Number(e.target.value))}
+              className="rounded-lg border border-line bg-bg px-2 py-1.5 text-xs text-ink"
+            >
+              {[100, 300, 500, 1000].map((m) => (
+                <option key={m} value={m}>
+                  {m}x (${(moonStake * m).toLocaleString()})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={runMoonshot}
+            disabled={moonLoading}
+            className="w-full rounded-lg bg-warn/90 py-2 text-sm font-bold text-[#2a1f03] transition hover:bg-warn disabled:opacity-50"
+          >
+            {moonLoading ? "Hunting…" : "Find moonshots"}
+          </button>
+        </Card>
+
         {/* Injuries / rating adjustments */}
         <Card className="p-4">
           <button onClick={() => setShowInjuries((s) => !s)} className="w-full text-left">
@@ -747,6 +806,42 @@ export function FindTab({
               </span>
             )}
             {decidedGames.length > 0 && <span>Conditioned on {decidedGames.length} played games</span>}
+          </div>
+        )}
+
+        {moonResult && (
+          <div className="space-y-3 rounded-xl border border-warn/30 bg-warn/[0.03] p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-warn">
+                🚀 Moonshots · ${moonStake} → ≥ ${(moonStake * moonMultiple).toLocaleString()}
+              </span>
+              <button onClick={() => setMoonResult(null)} className="text-xs text-ink-3 hover:text-down">
+                ✕ close
+              </button>
+            </div>
+            {moonResult.parlays.length === 0 && (
+              <p className="text-sm text-ink-2">
+                Nothing reaches {moonMultiple}x within 6 legs — try a lower multiple.
+              </p>
+            )}
+            {moonResult.parlays.map((p, i) => (
+              <div key={i}>
+                <p className="tnum mb-1 font-mono text-[11px] text-warn">
+                  ${moonStake} pays ${Math.round(moonStake * (p.combinedDecimal - 1)).toLocaleString()} ·
+                  model says {fmtPct(p.jointProb, 1)} · that's {p.jointProb > 0 ? `1 in ${Math.round(1 / p.jointProb)}` : "—"} seasons
+                </p>
+                <ParlayCard
+                  parlay={p}
+                  rank={i + 1}
+                  bankroll={moonStake}
+                  anchorWeight={0}
+                  copied={copied === 1000 + i}
+                  added={added === 1000 + i}
+                  onCopy={() => copySlip(p, 1000 + i)}
+                  onAdd={() => addToPortfolio(p, 1000 + i)}
+                />
+              </div>
+            ))}
           </div>
         )}
 
