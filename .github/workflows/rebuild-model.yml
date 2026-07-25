@@ -1,0 +1,35 @@
+# Weekly model rebuild, timed to the NFL week:
+#   Tuesday 10:00 UTC (~5am ET) — Monday Night Football stats have landed in
+#   nflverse's nightly refresh, the week is complete, and no games are near.
+# Rebuilds priors/QBs/schedule/H2H/FPI from fresh data; if anything changed,
+# commits the new team-model.json — Vercel's git integration auto-deploys it.
+name: rebuild-model
+on:
+  schedule:
+    - cron: "0 10 * * 2" # Tuesdays 10:00 UTC
+  workflow_dispatch: {} # manual "rebuild now" button on GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rebuild team model from nflverse + ESPN
+        run: node scripts/build-model.mjs
+      - name: Commit & push if changed
+        run: |
+          git config user.name "model-rebuild-bot"
+          git config user.email "actions@github.com"
+          git add src/lib/data/generated/team-model.json
+          if git diff --cached --quiet; then
+            echo "No data changes this week."
+          else
+            git commit -m "Weekly model rebuild ($(date -u +%F))"
+            git push
+          fi

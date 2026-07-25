@@ -256,7 +256,10 @@ export default function Home() {
             </div>
           </div>
 
-          <nav className="mt-3 flex gap-0.5">
+          <nav
+            className="mt-3 flex gap-0.5 overflow-x-auto whitespace-nowrap"
+            style={{ scrollbarWidth: "none" }}
+          >
             {TABS.map((t) => (
               <button
                 key={t.key}
