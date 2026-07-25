@@ -200,10 +200,10 @@ export function PortfolioTab({
                       <div
                         className={`h-full rounded-r ${
                           e.pct > 0.5
-                            ? "bg-[--color-chart-red]"
+                            ? "bg-chart-red"
                             : e.pct > 0.3
-                              ? "bg-[--color-chart-amber]"
-                              : "bg-[--color-chart-blue]"
+                              ? "bg-chart-amber"
+                              : "bg-chart-blue"
                         }`}
                         style={{ width: `${Math.min(100, e.pct * 100)}%` }}
                       />

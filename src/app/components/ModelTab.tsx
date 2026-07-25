@@ -78,10 +78,10 @@ export function ModelTab() {
                 <div
                   className={`h-full rounded-r ${
                     m.rmse < 0.03
-                      ? "bg-[--color-chart-green]"
+                      ? "bg-chart-green"
                       : m.rmse < 0.08
-                        ? "bg-[--color-chart-amber]"
-                        : "bg-[--color-chart-red]"
+                        ? "bg-chart-amber"
+                        : "bg-chart-red"
                   }`}
                   style={{ width: `${Math.min(100, m.rmse * 800)}%` }}
                   title={`${m.market}: RMSE ${(m.rmse * 100).toFixed(1)}pp over ${m.count} legs`}
@@ -128,7 +128,7 @@ export function ModelTab() {
                 {/* predicted */}
                 <div className="relative w-2/5 max-w-9">
                   <div
-                    className="w-full rounded-t bg-[--color-chart-blue] transition-opacity group-hover:opacity-100"
+                    className="w-full rounded-t bg-chart-blue transition-opacity group-hover:opacity-100"
                     style={{ height: `${b.predicted * 132}px`, opacity: 0.85 }}
                   />
                   <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
@@ -138,7 +138,7 @@ export function ModelTab() {
                 {/* actual */}
                 <div className="relative w-2/5 max-w-9">
                   <div
-                    className="w-full rounded-t bg-[--color-chart-green] transition-opacity group-hover:opacity-100"
+                    className="w-full rounded-t bg-chart-green transition-opacity group-hover:opacity-100"
                     style={{ height: `${b.empirical * 132}px`, opacity: 0.85 }}
                   />
                   <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
@@ -158,10 +158,10 @@ export function ModelTab() {
           </div>
           <div className="mt-3 flex items-center gap-5 text-[11px] text-ink-2">
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[--color-chart-blue]" /> predicted
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-chart-blue" /> predicted
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[--color-chart-green]" /> actually hit
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-chart-green" /> actually hit
             </span>
           </div>
         </div>

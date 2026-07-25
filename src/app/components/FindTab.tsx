@@ -788,7 +788,7 @@ function ProbBullet({ model, market }: { model: number; market: number }) {
       className="relative inline-block h-2 w-16 overflow-hidden rounded-full bg-surface-3 align-middle"
       title={`Model ${fmtPct(model, 1)} vs market ${fmtPct(market, 1)}`}
     >
-      <span className="absolute inset-y-0 left-0 rounded-full bg-[--color-chart-blue]/50" style={{ width: w(market) }} />
+      <span className="absolute inset-y-0 left-0 rounded-full bg-chart-blue/50" style={{ width: w(market) }} />
       <span
         className={`absolute inset-y-0 w-0.5 ${model >= market ? "bg-up" : "bg-warn"}`}
         style={{ left: w(model) }}

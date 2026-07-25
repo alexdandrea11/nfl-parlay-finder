@@ -296,7 +296,7 @@ function WinDistChart({ dist }: { dist: WinDistRow[] }) {
             title={`${d.wins} wins: ${fmtPct(d.p, 1)} of seasons`}
           >
             <div
-              className="w-full rounded-t bg-[--color-chart-blue] transition-opacity group-hover:opacity-100"
+              className="w-full rounded-t bg-chart-blue transition-opacity group-hover:opacity-100"
               style={{ height: `${(d.p / maxP) * 100}px`, opacity: 0.85 }}
             />
             <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
@@ -329,7 +329,7 @@ function CondChart({ dist }: { dist: WinDistRow[] }) {
             }
           >
             <div
-              className="w-full rounded-t bg-[--color-chart-green] transition-opacity group-hover:opacity-100"
+              className="w-full rounded-t bg-chart-green transition-opacity group-hover:opacity-100"
               style={{ height: `${(d.pPlayoffsGiven ?? 0) * 84}px`, opacity: d.pPlayoffsGiven == null ? 0.15 : 0.85 }}
             />
             <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
@@ -357,7 +357,7 @@ function UnitBar({ label, value, higherBetter }: { label: string; value: number;
       <div className="relative h-3 flex-1 rounded bg-bg">
         <div className="absolute inset-y-0 left-1/2 w-px bg-line-2" />
         <div
-          className={`absolute inset-y-0 rounded ${good ? "bg-[--color-chart-green]" : "bg-[--color-chart-red]"}`}
+          className={`absolute inset-y-0 rounded ${good ? "bg-chart-green" : "bg-chart-red"}`}
           style={
             good
               ? { left: "50%", width: `${mag * 50}%` }

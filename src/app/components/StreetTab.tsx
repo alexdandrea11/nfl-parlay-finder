@@ -143,16 +143,16 @@ export function StreetTab({
           <ScatterPlot points={data.scatter} />
           <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-ink-2">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[--color-chart-blue]" /> SB / Conference
+              <span className="h-2.5 w-2.5 rounded-full bg-chart-blue" /> SB / Conference
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[--color-chart-amber]" /> Division
+              <span className="h-2.5 w-2.5 rounded-full bg-chart-amber" /> Division
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[--color-chart-green]" /> Playoffs
+              <span className="h-2.5 w-2.5 rounded-full bg-chart-green" /> Playoffs
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[--color-chart-red]" /> Win totals
+              <span className="h-2.5 w-2.5 rounded-full bg-chart-red" /> Win totals
             </span>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
@@ -286,10 +286,10 @@ function ScatterPlot({ points }: { points: ScatterPoint[] }) {
       {/* diagonal */}
       <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="currentColor" className="text-line-2" strokeWidth={1} />
       {/* axis labels */}
-      <text x={S / 2} y={S - 1} textAnchor="middle" className="fill-[--color-ink-3]" fontSize={8}>
+      <text x={S / 2} y={S - 1} textAnchor="middle" className="fill-ink-3" fontSize={8}>
         street probability →
       </text>
-      <text x={7} y={S / 2} textAnchor="middle" transform={`rotate(-90 7 ${S / 2})`} className="fill-[--color-ink-3]" fontSize={8}>
+      <text x={7} y={S / 2} textAnchor="middle" transform={`rotate(-90 7 ${S / 2})`} className="fill-ink-3" fontSize={8}>
         our probability →
       </text>
       {points.map((p, i) => (
