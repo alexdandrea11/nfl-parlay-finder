@@ -13,8 +13,10 @@ import {
   type ScheduledGame,
   type TeamMeta,
 } from "./clientTypes";
+import { BuilderTab } from "./components/BuilderTab";
 import { FindTab, type DecidedGame } from "./components/FindTab";
 import { GameLinesTab } from "./components/GameLinesTab";
+import { GauntletTab } from "./components/GauntletTab";
 import { GuideTab } from "./components/GuideTab";
 import { InsightsTab } from "./components/InsightsTab";
 import { ScenarioTab } from "./components/ScenarioTab";
@@ -26,11 +28,13 @@ import { TeamsTab } from "./components/TeamsTab";
 import { LiveDot } from "./components/ui";
 
 type Tab =
-  | "find" | "games" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
+  | "find" | "builder" | "games" | "gauntlet" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
+  { key: "builder", label: "Builder" },
   { key: "games", label: "Game Lines" },
+  { key: "gauntlet", label: "Gauntlet" },
   { key: "teams", label: "Teams" },
   { key: "scenarios", label: "Scenarios" },
   { key: "insights", label: "Insights" },
@@ -304,6 +308,19 @@ export default function Home() {
             qbOverrides={qbOverrides}
             setQbOverrides={setQbOverrides}
           />
+        )}
+        {tab === "builder" && (
+          <BuilderTab
+            teams={teams}
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
+            customBoard={customBoard}
+            onAddTickets={(t) => setTickets([...tickets, ...t])}
+          />
+        )}
+        {tab === "gauntlet" && (
+          <GauntletTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
         )}
         {tab === "games" && (
           <GameLinesTab

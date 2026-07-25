@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fmtAmerican, fmtMoney, fmtPct } from "@/lib/format";
-import type { Adjustment, CustomBoard, LegRow, ParlayLeg, PortfolioResponse, QbOverrides, SavedTicket } from "../clientTypes";
+import type { Adjustment, CustomBoard, LegRow, PortfolioResponse, QbOverrides, SavedTicket } from "../clientTypes";
 
 interface HedgeResp {
   pLive: number;
@@ -10,11 +10,6 @@ interface HedgeResp {
   fairValue: number;
   cashOut: { offer: number; haircut: number; haircutPct: number } | null;
   hedges: { legId: string; label: string; americanOdds: number; hedgeStake: number; guaranteedFloor: number; evAfterHedge: number }[];
-}
-
-interface ConstructResp {
-  tickets: { legs: ParlayLeg[]; stake: number; combinedAmerican: number; jointProb: number; ev: number }[];
-  summary: { staked: number; pProfit: number; expectedPnl: number; p5: number; p50: number; p95: number };
 }
 
 interface LeverageResp {
@@ -51,10 +46,6 @@ export function PortfolioTab({
   const [hedgeOpen, setHedgeOpen] = useState<number | null>(null);
   const [hedgeData, setHedgeData] = useState<Record<number, HedgeResp>>({});
   const [cashOffer, setCashOffer] = useState("");
-  const [conBudget, setConBudget] = useState(500);
-  const [conObjective, setConObjective] = useState<"pProfit" | "median" | "upside">("pProfit");
-  const [conResult, setConResult] = useState<ConstructResp | null>(null);
-  const [conLoading, setConLoading] = useState(false);
   const [levData, setLevData] = useState<LeverageResp | null>(null);
 
   const stateBody = { adjustments, decidedGames, qbOverrides, customBoard };
@@ -74,21 +65,6 @@ export function PortfolioTab({
     });
     const d = await res.json();
     if (!d.error) setHedgeData((h) => ({ ...h, [i]: d }));
-  }
-
-  async function runConstructor() {
-    setConLoading(true);
-    try {
-      const res = await fetch("/api/construct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ budget: conBudget, objective: conObjective, ...stateBody }),
-      });
-      const d = await res.json();
-      if (!d.error) setConResult(d);
-    } finally {
-      setConLoading(false);
-    }
   }
 
   useEffect(() => {
@@ -219,63 +195,6 @@ export function PortfolioTab({
           </div>
         </Card>
       )}
-
-      {/* Portfolio constructor */}
-      <Card className="space-y-3 border-brand/25 p-4">
-        <SectionTitle>🧮 Portfolio constructor — build the optimal ticket set</SectionTitle>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-ink-3">$</span>
-          <input
-            type="number"
-            value={conBudget}
-            min={10}
-            onChange={(e) => setConBudget(Number(e.target.value))}
-            className="tnum w-24 rounded-lg border border-line bg-bg px-2.5 py-1.5 font-mono text-sm text-ink"
-          />
-          <select
-            value={conObjective}
-            onChange={(e) => setConObjective(e.target.value as typeof conObjective)}
-            className="rounded-lg border border-line bg-bg px-2 py-1.5 text-xs text-ink"
-          >
-            <option value="pProfit">Maximize P(profit)</option>
-            <option value="median">Maximize median outcome</option>
-            <option value="upside">Maximize upside (p95)</option>
-          </select>
-          <button
-            onClick={runConstructor}
-            disabled={conLoading}
-            className="rounded-lg bg-brand/90 px-4 py-1.5 text-sm font-bold text-white transition hover:bg-brand disabled:opacity-50"
-          >
-            {conLoading ? "Optimizing…" : "Construct"}
-          </button>
-        </div>
-        {conResult && (
-          <div className="space-y-1.5">
-            <p className="tnum font-mono text-[11px] text-ink-2">
-              {conResult.tickets.length} tickets · ${conResult.summary.staked} staked · P(profit){" "}
-              {fmtPct(conResult.summary.pProfit, 0)} · EV ${conResult.summary.expectedPnl} · p5 $
-              {conResult.summary.p5} / p95 ${conResult.summary.p95}
-            </p>
-            {conResult.tickets.map((t, i) => (
-              <div key={i} className="flex items-center justify-between rounded-lg bg-bg px-3 py-1.5 text-xs">
-                <span className="min-w-0 truncate">{t.legs.map((l) => l.label).join(" + ")}</span>
-                <span className="tnum ml-2 shrink-0 font-mono text-ink-3">
-                  ${t.stake} @ {fmtAmerican(t.combinedAmerican)} · {fmtPct(t.jointProb, 0)}
-                </span>
-              </div>
-            ))}
-            <button
-              onClick={() => {
-                setTickets([...tickets, ...conResult.tickets.map((t) => ({ legIds: t.legs.map((l) => l.id), stake: t.stake }))]);
-                setConResult(null);
-              }}
-              className="rounded-lg bg-up px-3 py-1.5 text-xs font-bold text-[#03271c] hover:bg-up-dim"
-            >
-              Add all to portfolio
-            </button>
-          </div>
-        )}
-      </Card>
 
       {/* Leverage board */}
       {levData && levData.games.length > 0 && (

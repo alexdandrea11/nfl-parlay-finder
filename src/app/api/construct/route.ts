@@ -40,6 +40,14 @@ export async function POST(req: Request) {
     const { sim } = engine;
     const N = sim.N;
 
+    // Steering: exclude legs/teams/markets you directionally disagree with.
+    const exLegs = new Set((Array.isArray(body.excludeLegIds) ? body.excludeLegIds : []).map(String));
+    const exTeams = new Set((Array.isArray(body.excludeTeams) ? body.excludeTeams : []).map(String));
+    const exMarkets = new Set((Array.isArray(body.excludeMarkets) ? body.excludeMarkets : []).map(String));
+    const pool = engine.legs.filter(
+      (l) => !exLegs.has(l.id) && !exTeams.has(l.teamId) && !exMarkets.has(l.market),
+    );
+
     // Candidate pool from three complementary hunting styles.
     const presets: Partial<SearchParams>[] = [
       { sortBy: "value", minEv: 0, minWinProb: 0.15 },
@@ -50,7 +58,7 @@ export async function POST(req: Request) {
     const candidates: { p: Parlay; bits: Uint32Array; dec: number }[] = [];
     const byId = new Map(engine.legs.map((l) => [l.id, l]));
     for (const preset of presets) {
-      const res = search(sim, engine.legs, { ...BASE, ...preset });
+      const res = search(sim, pool, { ...BASE, ...preset });
       for (const p of res.parlays) {
         const key = p.legs.map((l) => l.id).sort().join("|");
         if (seen.has(key)) continue;
