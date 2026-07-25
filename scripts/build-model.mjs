@@ -260,6 +260,39 @@ function extractH2h(games) {
   return h2h;
 }
 
+// --- experts: ESPN FPI (public JSON endpoint, no auth) -------------------------
+// FPI is in points-vs-average (same scale as our power rating); projections[0]
+// is ESPN's projected wins. Used for display/comparison only — never as a
+// model input, so the model stays proprietary.
+async function fetchFpi() {
+  try {
+    const res = await fetch(
+      "https://site.web.api.espn.com/apis/fitt/v3/sports/football/nfl/powerindex?region=us&lang=en&limit=40",
+      { headers: { "User-Agent": "Mozilla/5.0" } },
+    );
+    if (!res.ok) throw new Error(`FPI ${res.status}`);
+    const j = await res.json();
+    const teams = {};
+    for (const t of j.teams ?? []) {
+      const id = mapCode(t.team.abbreviation);
+      if (!DIVISIONS[id]) continue;
+      const fpiCat = t.categories?.find((c) => c.name === "fpi");
+      const projCat = t.categories?.find((c) => c.name === "projections");
+      const fpi = Number(fpiCat?.values?.[0]);
+      const projWins = Number(projCat?.values?.[0]);
+      teams[id] = {
+        fpi: Number.isFinite(fpi) ? fpi : null,
+        projWins: Number.isFinite(projWins) ? projWins : null,
+      };
+    }
+    if (Object.keys(teams).length < 30) throw new Error("FPI parse: too few teams");
+    return { source: "ESPN FPI", season: j.requestedSeason?.year ?? j.currentSeason?.year, updatedAt: j.lastUpdated ?? null, teams };
+  } catch (e) {
+    console.warn(`  ! expert ratings unavailable (${e.message}) — continuing without`);
+    return null;
+  }
+}
+
 // --- main ---------------------------------------------------------------------
 console.log("Building team model from nflverse …");
 const perSeason = {};
@@ -269,6 +302,8 @@ const { blended, leagueMean } = blendAndShrink(perSeason);
 const perSeasonQb = {};
 for (const s of SEASONS) perSeasonQb[s] = await seasonQbRates(s);
 const qbs = buildQbTable(perSeasonQb);
+
+const experts = await fetchFpi();
 
 const games = await loadGames();
 const schedule = extractSchedule(games, TARGET_SEASON);
@@ -287,6 +322,7 @@ const model = {
   units: blended,
   perSeason,
   qbs,
+  experts,
   schedule,
   h2h,
 };

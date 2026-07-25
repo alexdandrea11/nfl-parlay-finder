@@ -52,6 +52,16 @@ const LEAGUE = model.leagueMean as UnitProfile;
 export const SCHEDULE: ScheduledGame[] = model.schedule as ScheduledGame[];
 export const H2H = model.h2h as Record<string, Record<string, H2hGame[]>>;
 
+export interface ExpertRatings {
+  source: string;
+  season: number;
+  updatedAt: string | null;
+  teams: Record<string, { fpi: number | null; projWins: number | null }>;
+}
+
+export const EXPERTS: ExpertRatings | null =
+  (model as { experts?: ExpertRatings }).experts ?? null;
+
 export interface QbInfo {
   id: string;
   name: string;

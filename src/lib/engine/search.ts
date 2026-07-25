@@ -16,18 +16,20 @@ export interface SearchResult {
 }
 
 function scoreOf(p: Parlay, objective: SortObjective): number {
+  // Anchored values drive ranking; with anchor weight 0 they equal the pure
+  // model values.
   switch (objective) {
     case "ev":
-      return p.ev;
+      return p.evAnchored;
     case "prob":
-      return p.jointProb;
+      return p.anchoredProb;
     case "payout":
       return p.combinedDecimal;
     case "value": {
       // EV per unit of standard deviation (Bernoulli variance of the parlay).
-      const variance = p.jointProb * (1 - p.jointProb) * p.combinedDecimal ** 2;
+      const variance = p.anchoredProb * (1 - p.anchoredProb) * p.combinedDecimal ** 2;
       const sd = Math.sqrt(Math.max(variance, 1e-9));
-      return p.ev / sd;
+      return p.evAnchored / sd;
     }
   }
 }
@@ -96,7 +98,13 @@ export function search(
     // Evaluate a complete parlay if within the leg-count window.
     if (depth >= params.minLegs && depth <= params.maxLegs) {
       const legs = chosen.map((i) => pool[i]);
-      const parlay = evaluateParlay(legs, stack[depth], sim.N, params.kellyMultiplier);
+      const parlay = evaluateParlay(
+        legs,
+        stack[depth],
+        sim.N,
+        params.kellyMultiplier,
+        params.anchorWeight,
+      );
       evaluated++;
       if (evaluated >= MAX_EVAL) hitEvalCap = true;
 
@@ -105,8 +113,8 @@ export function search(
       const fdIsBestEverywhere = legs.every((l) => l.decimalOdds >= l.bestDecimal - 1e-9);
       const passes =
         !parlay.impossible &&
-        parlay.jointProb >= params.minWinProb &&
-        parlay.ev >= params.minEv &&
+        parlay.anchoredProb >= params.minWinProb &&
+        parlay.evAnchored >= params.minEv &&
         (minPayoutImplied == null || combinedAmericanImplied <= minPayoutImplied) &&
         (maxPayoutImplied == null || combinedAmericanImplied >= maxPayoutImplied) &&
         (!params.requireLineShopEdge || fdIsBestEverywhere);

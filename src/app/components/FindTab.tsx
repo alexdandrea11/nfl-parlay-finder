@@ -81,6 +81,7 @@ export function FindTab({
   const [minPayout, setMinPayout] = useState("");
   const [maxPayout, setMaxPayout] = useState("");
   const [allowCorrelated, setAllowCorrelated] = useState(false);
+  const [anchorWeight, setAnchorWeight] = useState(0.3);
   const [requireLineShopEdge, setRequireLineShopEdge] = useState(false);
   const [maxDivergence, setMaxDivergence] = useState<number>(0.15);
   const [divergenceOn, setDivergenceOn] = useState(true);
@@ -127,6 +128,7 @@ export function FindTab({
       minPayoutAmerican: minPayout,
       maxPayoutAmerican: maxPayout,
       allowCorrelated,
+      anchorWeight,
       maxDivergence: divergenceOn ? maxDivergence : null,
       requireLineShopEdge,
       sortBy,
@@ -353,6 +355,26 @@ export function FindTab({
               <Toggle on={allowCorrelated} onChange={setAllowCorrelated} labelOn="Allowed" labelOff="Blocked" />
             </Field>
           </div>
+
+          <Field
+            label={`Market anchor · ${Math.round(anchorWeight * 100)}% ${
+              anchorWeight === 0 ? "(pure model)" : anchorWeight >= 0.99 ? "(pure market)" : ""
+            }`}
+          >
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={anchorWeight}
+              onChange={(e) => setAnchorWeight(Number(e.target.value))}
+              className="w-full text-brand"
+            />
+            <p className="mt-1.5 text-[10px] leading-relaxed text-ink-3">
+              Blends our probabilities toward street consensus before computing EV and stakes —
+              conviction "within reason." 0% = trust the model alone.
+            </p>
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="FD best-priced only">
@@ -793,16 +815,18 @@ function ParlayCard({
   const [quote, setQuote] = useState("");
   const stake = bankroll * p.kellyFraction;
   const toWin = stake * (p.combinedDecimal - 1);
-  const evPos = p.ev >= 0;
+  const anchored = Math.abs(p.anchoredProb - p.jointProb) > 0.0005;
+  const evShown = p.evAnchored;
+  const evPos = evShown >= 0;
   const corr = p.correlation;
   const corrLabel = corr > 1.08 ? "correlated" : corr < 0.92 ? "anti-correlated" : null;
   const fdBeatsBest = p.bestCombinedDecimal <= p.combinedDecimal + 1e-9;
-  const fair = fairAmerican(p.jointProb);
+  const fair = fairAmerican(p.anchoredProb);
 
   // "I looked it up on FanDuel — they quote X": EV at the user's real quote.
   const quoted = parseAmerican(quote);
   const quotedDec = quoted == null ? null : quoted > 0 ? 1 + quoted / 100 : 1 + 100 / -quoted;
-  const quotedEv = quotedDec == null ? null : p.jointProb * quotedDec - 1;
+  const quotedEv = quotedDec == null ? null : p.anchoredProb * quotedDec - 1;
 
   return (
     <Card hover className="p-4">
@@ -828,15 +852,25 @@ function ParlayCard({
           </div>
         </div>
         <div className="flex gap-5 text-right">
-          <Stat label="Win prob" value={fmtPct(p.jointProb)} />
+          <Stat label="Win prob" value={fmtPct(p.anchoredProb)} />
           <Stat label="Fair price" value={fmtAmerican(fair)} tone="neutral" />
           <Stat
             label="EV @ board"
-            value={`${evPos ? "+" : ""}${fmtPct(p.ev, 1)}`}
+            value={`${evPos ? "+" : ""}${fmtPct(evShown, 1)}`}
             tone={evPos ? "good" : "bad"}
             glow
           />
         </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-ink-3">
+        {anchored && (
+          <span className="tnum font-mono" title="Pure model, before the market anchor">
+            pure model: {fmtPct(p.jointProb)} win · {p.ev >= 0 ? "+" : ""}
+            {fmtPct(p.ev, 1)} EV
+          </span>
+        )}
+        <span className="tnum font-mono">street: {fmtPct(p.marketProb)}</span>
       </div>
 
       <div className="mt-3 space-y-1">

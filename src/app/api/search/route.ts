@@ -57,6 +57,9 @@ function parseParams(body: Record<string, unknown>): SearchParams {
         ? null
         : Number(body.maxPayoutAmerican),
     allowCorrelated: Boolean(body.allowCorrelated),
+    anchorWeight: Number.isFinite(Number(body.anchorWeight))
+      ? Math.min(1, Math.max(0, Number(body.anchorWeight)))
+      : 0.3,
     maxDivergence:
       body.maxDivergence == null || body.maxDivergence === ""
         ? null

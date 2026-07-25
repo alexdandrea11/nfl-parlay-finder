@@ -39,6 +39,21 @@ export function devigProportional(impliedProbs: number[]): number[] {
   return impliedProbs.map((p) => p / total);
 }
 
+/**
+ * Anchor a model probability toward market consensus in log-odds space.
+ * w = 0 returns the pure model; w = 1 returns the market. Log-odds blending
+ * keeps small probabilities behaving sensibly (a 2% vs 6% disagreement is a
+ * big deal; 42% vs 46% is not).
+ */
+export function anchorProb(model: number, market: number, w: number): number {
+  if (w <= 0) return model;
+  if (w >= 1) return market;
+  const clamp = (p: number) => Math.min(0.9999, Math.max(0.0001, p));
+  const logit = (p: number) => Math.log(p / (1 - p));
+  const z = (1 - w) * logit(clamp(model)) + w * logit(clamp(market));
+  return 1 / (1 + Math.exp(-z));
+}
+
 /** Expected value per $1 staked given a decimal price and true prob. */
 export function expectedValue(decimalOdds: number, trueProb: number): number {
   return trueProb * decimalOdds - 1;

@@ -14,20 +14,24 @@ import {
   type TeamMeta,
 } from "./clientTypes";
 import { FindTab, type DecidedGame } from "./components/FindTab";
+import { GuideTab } from "./components/GuideTab";
 import { LineShopTab } from "./components/LineShopTab";
 import { ModelTab } from "./components/ModelTab";
 import { PortfolioTab } from "./components/PortfolioTab";
+import { StreetTab } from "./components/StreetTab";
 import { TeamsTab } from "./components/TeamsTab";
 import { LiveDot } from "./components/ui";
 
-type Tab = "find" | "teams" | "lines" | "portfolio" | "model";
+type Tab = "find" | "teams" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
   { key: "teams", label: "Teams" },
+  { key: "street", label: "Vs. Street" },
   { key: "lines", label: "Line Shop" },
   { key: "portfolio", label: "Portfolio" },
   { key: "model", label: "Model Trust" },
+  { key: "guide", label: "Guide" },
 ];
 
 export default function Home() {
@@ -190,6 +194,15 @@ export default function Home() {
             setQbOverrides={setQbOverrides}
           />
         )}
+        {tab === "street" && (
+          <StreetTab
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
+            customBoard={customBoard}
+          />
+        )}
+        {tab === "guide" && <GuideTab />}
         {tab === "lines" && (
           <LineShopTab
             teams={teams}

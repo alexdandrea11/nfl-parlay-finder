@@ -89,11 +89,16 @@ export interface Parlay {
   independentProb: number;
   /** True joint win prob from the simulation (handles correlation). */
   jointProb: number;
+  /** jointProb pulled toward market consensus by the anchor weight. */
+  anchoredProb: number;
   /** Book-implied combined prob (product of FanDuel implied). */
   impliedProb: number;
   /** Market-consensus combined prob (product of de-vigged marketProb). */
   marketProb: number;
+  /** EV at the pure model probability. */
   ev: number;
+  /** EV at the anchored probability — what filters and ranking use. */
+  evAnchored: number;
   /** EV if bet at best available books instead of FanDuel. */
   evBest: number;
   roi: number;
@@ -131,6 +136,8 @@ export interface SearchParams {
   minPayoutAmerican: number | null;
   maxPayoutAmerican: number | null;
   allowCorrelated: boolean;
+  /** 0 = pure proprietary model, 1 = pure market; blended in log-odds. */
+  anchorWeight: number;
   /** Drop legs where |modelProb - marketProb| exceeds this (null = off). */
   maxDivergence: number | null;
   /** Only keep parlays where FanDuel matches-or-beats every book on every leg

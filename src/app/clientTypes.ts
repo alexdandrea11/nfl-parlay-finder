@@ -71,9 +71,11 @@ export interface Parlay {
   bestCombinedAmerican: number;
   independentProb: number;
   jointProb: number;
+  anchoredProb: number;
   impliedProb: number;
   marketProb: number;
   ev: number;
+  evAnchored: number;
   evBest: number;
   kellyFraction: number;
   correlation: number;
