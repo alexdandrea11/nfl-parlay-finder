@@ -84,39 +84,95 @@ async function fetchCsv(url) {
 }
 
 // --- unit rates from weekly team stats --------------------------------------
+// Three refinements over raw EPA/play:
+//   1. per-game rows kept so units can be OPPONENT-ADJUSTED (a +0.05 vs elite
+//      defenses beats +0.08 vs cupcakes)
+//   2. TURNOVER-LUCK regression: half of excess giveaway/takeaway value is
+//      luck (fumble bounces, tipped INTs) — removed before rating
+//   3. output shape unchanged, so blending/shrinking downstream is untouched.
+const EPA_PER_TO = 4.2; // approximate EPA swing of one turnover
+const TO_LUCK_SHARE = 0.5; // fraction of excess turnover value treated as luck
+
 async function seasonUnitRates(season) {
   const rows = await fetchCsv(
     `https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_${season}.csv`,
   );
   const reg = rows.filter((r) => r.season_type === "REG");
-  const agg = {}; // team -> sums
-  const blank = () => ({
-    passEpa: 0, dropbacks: 0, rushEpa: 0, carries: 0, games: 0,
-    passEpaAllowed: 0, dropbacksFaced: 0, rushEpaAllowed: 0, carriesFaced: 0,
-  });
+  // Per-game offensive rows (defense = the opponent's offensive row).
+  const games = [];
   for (const r of reg) {
     const team = mapCode(r.team);
     const opp = mapCode(r.opponent_team);
     if (!DIVISIONS[team] || !DIVISIONS[opp]) continue;
-    const passEpa = Number(r.passing_epa) || 0;
     const dropbacks = (Number(r.attempts) || 0) + (Number(r.sacks_suffered) || 0);
-    const rushEpa = Number(r.rushing_epa) || 0;
     const carries = Number(r.carries) || 0;
-    const t = (agg[team] ??= blank());
-    t.passEpa += passEpa; t.dropbacks += dropbacks;
-    t.rushEpa += rushEpa; t.carries += carries;
-    t.games += 1;
-    const d = (agg[opp] ??= blank());
-    d.passEpaAllowed += passEpa; d.dropbacksFaced += dropbacks;
-    d.rushEpaAllowed += rushEpa; d.carriesFaced += carries;
+    games.push({
+      team, opp,
+      passRate: dropbacks ? (Number(r.passing_epa) || 0) / dropbacks : 0,
+      rushRate: carries ? (Number(r.rushing_epa) || 0) / carries : 0,
+      dropbacks, carries,
+      giveP: (Number(r.passing_interceptions) || 0) + (Number(r.sack_fumbles_lost) || 0) + (Number(r.receiving_fumbles_lost) || 0),
+      giveR: Number(r.rushing_fumbles_lost) || 0,
+    });
   }
+
+  // Iterative opponent adjustment per unit: a team's rating is its average
+  // game rate relative to the (current estimate of) each opponent's unit.
+  const teamsIn = [...new Set(games.map((g) => g.team))];
+  const adjust = (rateKey, playKey) => {
+    const lg =
+      games.reduce((a, g) => a + g[rateKey] * g[playKey], 0) /
+      Math.max(1, games.reduce((a, g) => a + g[playKey], 0));
+    const off = {};
+    const def = {};
+    for (const t of teamsIn) { off[t] = lg; def[t] = lg; }
+    for (let iter = 0; iter < 8; iter++) {
+      const offNext = {};
+      const defNext = {};
+      for (const t of teamsIn) {
+        const mine = games.filter((g) => g.team === t);
+        offNext[t] = mine.length
+          ? mine.reduce((a, g) => a + (g[rateKey] - (def[g.opp] - lg)), 0) / mine.length
+          : lg;
+        const faced = games.filter((g) => g.opp === t);
+        defNext[t] = faced.length
+          ? faced.reduce((a, g) => a + (g[rateKey] - (off[g.team] - lg)), 0) / faced.length
+          : lg;
+      }
+      Object.assign(off, offNext);
+      Object.assign(def, defNext);
+    }
+    return { off, def };
+  };
+  const pass = adjust("passRate", "dropbacks");
+  const rush = adjust("rushRate", "carries");
+
+  // Turnover-luck regression on top of the adjusted rates.
+  const agg = {};
+  for (const g of games) {
+    const t = (agg[g.team] ??= { db: 0, ca: 0, giveP: 0, giveR: 0, takeP: 0, takeR: 0, dbF: 0, caF: 0, games: 0 });
+    t.db += g.dropbacks; t.ca += g.carries; t.giveP += g.giveP; t.giveR += g.giveR; t.games++;
+    const d = (agg[g.opp] ??= { db: 0, ca: 0, giveP: 0, giveR: 0, takeP: 0, takeR: 0, dbF: 0, caF: 0, games: 0 });
+    d.takeP += g.giveP; d.takeR += g.giveR; d.dbF += g.dropbacks; d.caF += g.carries;
+  }
+  const tot = Object.values(agg);
+  const lgGivePRate = tot.reduce((a, t) => a + t.giveP, 0) / Math.max(1, tot.reduce((a, t) => a + t.db, 0));
+  const lgGiveRRate = tot.reduce((a, t) => a + t.giveR, 0) / Math.max(1, tot.reduce((a, t) => a + t.ca, 0));
+
   const rates = {};
-  for (const [team, t] of Object.entries(agg)) {
+  for (const team of teamsIn) {
+    const t = agg[team];
+    // Excess giveaways depressed offensive EPA; add back the luck share.
+    const passOffAdj = t.db ? (TO_LUCK_SHARE * EPA_PER_TO * (t.giveP - lgGivePRate * t.db)) / t.db : 0;
+    const rushOffAdj = t.ca ? (TO_LUCK_SHARE * EPA_PER_TO * (t.giveR - lgGiveRRate * t.ca)) / t.ca : 0;
+    // Excess takeaways flattered the defense; give some back.
+    const passDefAdj = t.dbF ? (TO_LUCK_SHARE * EPA_PER_TO * (t.takeP - lgGivePRate * t.dbF)) / t.dbF : 0;
+    const rushDefAdj = t.caF ? (TO_LUCK_SHARE * EPA_PER_TO * (t.takeR - lgGiveRRate * t.caF)) / t.caF : 0;
     rates[team] = {
-      passOff: t.dropbacks ? t.passEpa / t.dropbacks : 0,
-      rushOff: t.carries ? t.rushEpa / t.carries : 0,
-      passDef: t.dropbacksFaced ? t.passEpaAllowed / t.dropbacksFaced : 0, // EPA allowed (lower = better D)
-      rushDef: t.carriesFaced ? t.rushEpaAllowed / t.carriesFaced : 0,
+      passOff: pass.off[team] + passOffAdj,
+      rushOff: rush.off[team] + rushOffAdj,
+      passDef: pass.def[team] + passDefAdj,
+      rushDef: rush.def[team] + rushDefAdj,
       games: t.games,
     };
   }
@@ -232,6 +288,9 @@ function extractSchedule(games, season) {
       week: Number(g.week),
       home: mapCode(g.home_team),
       away: mapCode(g.away_team),
+      // Rest days going into the game (7 = normal week).
+      hRest: Number(g.home_rest) || 7,
+      aRest: Number(g.away_rest) || 7,
     }))
     .filter((g) => DIVISIONS[g.home] && DIVISIONS[g.away]);
 }

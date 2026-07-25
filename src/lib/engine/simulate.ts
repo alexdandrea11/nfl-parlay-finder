@@ -1,4 +1,12 @@
-import { buildWinProbMatrices, eloToPts, qbPassOffDelta, SCHEDULE, type UnitProfile } from "./gameModel";
+import {
+  buildWinProbMatrices,
+  eloToPts,
+  probMarginOver,
+  qbPassOffDelta,
+  restAdjustment,
+  SCHEDULE,
+  type UnitProfile,
+} from "./gameModel";
 import { mulberry32 } from "./random";
 import type { Conference, EngineOptions, Team } from "./types";
 
@@ -12,6 +20,8 @@ export interface SimResult {
   madePlayoffs: Uint8Array;
   wonConference: Uint8Array;
   wonSuperbowl: Uint8Array;
+  /** Times each team landed each playoff seed: [teamIdx*7 + (seed-1)]. */
+  seedCounts: Int32Array;
 }
 
 interface Standing {
@@ -54,12 +64,11 @@ export function runSimulation(
     if (i != null) passOffDelta[i] = qbPassOffDelta(teamId, qbId);
   }
 
-  const { home: pHomeMatrix, neutral: pNeutralMatrix } = buildWinProbMatrices(
-    teams,
-    adjustPts,
-    passOffDelta,
-    unitsOverride,
-  );
+  const {
+    home: pHomeMatrix,
+    neutral: pNeutralMatrix,
+    marginHome: marginMatrix,
+  } = buildWinProbMatrices(teams, adjustPts, passOffDelta, unitsOverride);
 
   // Real schedule → per-game home-team win probability, precomputed once.
   const games = SCHEDULE.filter((g) => index[g.home] != null && index[g.away] != null);
@@ -72,7 +81,12 @@ export function runSimulation(
     const a = index[g.away];
     gHome[gi] = h;
     gAway[gi] = a;
-    gProb[gi] = pHomeMatrix[h * T + a];
+    // Schedule-spot adjustment: short weeks and byes move the margin.
+    const rest = restAdjustment(g.hRest, g.aRest);
+    gProb[gi] =
+      rest === 0
+        ? pHomeMatrix[h * T + a]
+        : probMarginOver(marginMatrix[h * T + a] + rest, 0);
   });
 
   // Games already decided (in-season): force the winner. Keyed by the ORDERED
@@ -113,6 +127,7 @@ export function runSimulation(
   }
 
   const winCounts = new Int16Array(T * N);
+  const seedCounts = new Int32Array(T * 7);
   const wonDivision = new Uint8Array(T * N);
   const madePlayoffs = new Uint8Array(T * N);
   const wonConference = new Uint8Array(T * N);
@@ -206,7 +221,10 @@ export function runSimulation(
       const seeds = [...divWinners, ...wildcards];
 
       for (const w of divWinners) wonDivision[w.idx * N + s] = 1;
-      for (const st of seeds) madePlayoffs[st.idx * N + s] = 1;
+      seeds.forEach((st, seedIdx) => {
+        madePlayoffs[st.idx * N + s] = 1;
+        seedCounts[st.idx * 7 + seedIdx]++;
+      });
 
       const confChampIdx = simulatePlayoffs(seeds, pHomeMatrix, T, rnd);
       wonConference[confChampIdx * N + s] = 1;
@@ -229,6 +247,7 @@ export function runSimulation(
     madePlayoffs,
     wonConference,
     wonSuperbowl,
+    seedCounts,
   };
 }
 

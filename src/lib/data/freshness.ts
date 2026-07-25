@@ -207,6 +207,67 @@ export async function getSeasonOverlay(): Promise<SeasonOverlay | null> {
   return statsCache;
 }
 
+// --- Injury reports (display-only — never a model input) --------------------
+
+export interface InjuryRow {
+  player: string;
+  position: string;
+  status: string; // Out / Doubtful / Questionable / IR...
+  injury: string;
+  week: number;
+}
+
+let injCache: { byTeam: Record<string, InjuryRow[]>; fetchedAt: number } | null = null;
+let injMiss = 0;
+let injFetch: Promise<void> | null = null;
+
+async function fetchInjuries(): Promise<Record<string, InjuryRow[]> | null> {
+  const url = `https://github.com/nflverse/nflverse-data/releases/download/injuries/injuries_${MODEL_META.season}.csv`;
+  const res = await fetch(url, { redirect: "follow", cache: "no-store" });
+  if (!res.ok) return null; // appears once the season nears
+  const rows = parseCsv(await res.text());
+  if (!rows.length) return null;
+  let maxWeek = 0;
+  for (const r of rows) maxWeek = Math.max(maxWeek, Number(r.week) || 0);
+  const byTeam: Record<string, InjuryRow[]> = {};
+  for (const r of rows) {
+    if (Number(r.week) !== maxWeek) continue; // latest report only
+    const team = mapCode(r.team);
+    if (!TEAMS_BY_ID[team]) continue;
+    const status = r.report_status || r.practice_status || "";
+    if (!status) continue;
+    (byTeam[team] ??= []).push({
+      player: r.full_name || r.gsis_id || "?",
+      position: r.position || "",
+      status,
+      injury: r.report_primary_injury || r.practice_primary_injury || "",
+      week: maxWeek,
+    });
+  }
+  return byTeam;
+}
+
+export async function getInjuries(): Promise<Record<string, InjuryRow[]> | null> {
+  const fresh =
+    (injCache && Date.now() - injCache.fetchedAt < STATS_TTL_MS) ||
+    (injMiss && Date.now() - injMiss < STATS_TTL_MS);
+  if (!fresh && !injFetch) {
+    injFetch = fetchInjuries()
+      .then((d) => {
+        if (d) injCache = { byTeam: d, fetchedAt: Date.now() };
+        else injMiss = Date.now();
+      })
+      .catch(() => {
+        injMiss = Date.now();
+      })
+      .finally(() => {
+        injFetch = null;
+      });
+  }
+  if (injFetch) await injFetch;
+  return injCache?.byTeam ?? null;
+}
+
 /**
  * Blend baked priors with current-season rates. Weight grows with games
  * played: w = gp / (gp + K). K=10 → the current season is half the model by

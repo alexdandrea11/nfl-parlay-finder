@@ -55,6 +55,35 @@ export async function GET(req: Request) {
   await writeDoc("odds-history-index", history.slice(-90));
   await writeDoc(`snapshots/odds-${new Date(snapshot.ts).toISOString().slice(0, 10)}`, snapshot);
 
+  // 1b. Model-probability timeline point (feeds the Insights chart).
+  {
+    const { sim } = engine;
+    const N = sim.N;
+    const teams: Record<string, { w: number; po: number; dv: number; sb: number }> = {};
+    for (const t of engine.teams) {
+      const base = sim.index[t.id] * N;
+      let w = 0;
+      let po = 0;
+      let dv = 0;
+      let sb = 0;
+      for (let s = 0; s < N; s++) {
+        w += sim.winCounts[base + s];
+        po += sim.madePlayoffs[base + s];
+        dv += sim.wonDivision[base + s];
+        sb += sim.wonSuperbowl[base + s];
+      }
+      teams[t.id] = {
+        w: Math.round((w / N) * 100) / 100,
+        po: Math.round((po / N) * 1000) / 1000,
+        dv: Math.round((dv / N) * 1000) / 1000,
+        sb: Math.round((sb / N) * 1000) / 1000,
+      };
+    }
+    const mh = await readDoc<{ ts: number }[]>("model-history", []);
+    mh.push({ ts: Date.now(), teams } as never);
+    await writeDoc("model-history", mh.slice(-250));
+  }
+
   // 2. Saved-search alert sweep.
   const searches = (Array.isArray(kv["nfl-saved-searches"]) ? kv["nfl-saved-searches"] : []) as SavedSearchDoc[];
   const items = [];

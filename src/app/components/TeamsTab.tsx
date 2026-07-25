@@ -45,6 +45,7 @@ interface TeamDetail {
   rivals: Rival[];
   units: { passOff: number; rushOff: number; passDef: number; rushDef: number; league: { passOff: number; rushOff: number; passDef: number; rushDef: number } };
   h2h: H2hEntry[];
+  injuries: { player: string; position: string; status: string; injury: string; week: number }[] | null;
 }
 
 export function TeamsTab({
@@ -256,6 +257,45 @@ export function TeamsTab({
                   <UnitBar label="Pass defense" value={detail.units.passDef - detail.units.league.passDef} higherBetter={false} />
                   <UnitBar label="Rush defense" value={detail.units.rushDef - detail.units.league.rushDef} higherBetter={false} />
                 </div>
+              </Card>
+
+              {/* Injury report */}
+              <Card className="p-5">
+                <SectionTitle>
+                  Injury report{detail.injuries?.length ? ` · week ${detail.injuries[0].week}` : ""}
+                </SectionTitle>
+                {!detail.injuries || detail.injuries.length === 0 ? (
+                  <p className="mt-2 text-[11px] text-ink-3">
+                    No published report (offseason, or nothing listed). In season this updates
+                    from the official NFL injury reports automatically.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-1">
+                    {detail.injuries.slice(0, 12).map((inj, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg bg-bg px-3 py-1.5 text-xs">
+                        <span>
+                          <b>{inj.player}</b>
+                          <span className="ml-1.5 text-ink-3">{inj.position}{inj.injury && ` · ${inj.injury}`}</span>
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            /out|ir/i.test(inj.status)
+                              ? "bg-down/15 text-down"
+                              : /doubtful/i.test(inj.status)
+                                ? "bg-warn/15 text-warn"
+                                : "bg-surface-3 text-ink-2"
+                          }`}
+                        >
+                          {inj.status}
+                        </span>
+                      </div>
+                    ))}
+                    <p className="pt-1 text-[11px] leading-relaxed text-ink-3">
+                      Context only — the model doesn't auto-adjust. If a name here matters, express
+                      it: QB out → swap the starter above; other key pieces → injury slider in Find.
+                    </p>
+                  </div>
+                )}
               </Card>
 
               {/* H2H context */}

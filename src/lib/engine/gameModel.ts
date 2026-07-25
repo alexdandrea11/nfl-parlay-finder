@@ -23,6 +23,15 @@ export interface ScheduledGame {
   week: number;
   home: string;
   away: string;
+  /** Rest days going into the game (7 = normal week). */
+  hRest?: number;
+  aRest?: number;
+}
+
+// Schedule-spot effect: points per extra rest day, capped (bye ≈ +1.2 pts).
+const REST_PTS_PER_DAY = 0.12;
+export function restAdjustment(hRest = 7, aRest = 7): number {
+  return Math.max(-1.5, Math.min(1.5, (hRest - aRest) * REST_PTS_PER_DAY));
 }
 
 interface H2hGame {

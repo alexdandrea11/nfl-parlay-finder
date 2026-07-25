@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getInjuries } from "@/lib/data/freshness";
 import { getEngine } from "@/lib/engine/engineCache";
 import { H2H, leagueMean, powerPts, unitsFor } from "@/lib/engine/gameModel";
 import type { DecidedGame, EngineOptions, RatingAdjustment } from "@/lib/engine/types";
@@ -125,6 +126,7 @@ export async function POST(req: Request) {
       pConference: conference / N,
       pSuperbowl: superbowl / N,
       power: Math.round(powerPts(teamId, engine.units) * 10) / 10,
+      injuries: (await getInjuries().catch(() => null))?.[teamId] ?? null,
       winDist,
       rivals,
       units,

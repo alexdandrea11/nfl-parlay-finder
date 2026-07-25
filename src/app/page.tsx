@@ -16,6 +16,8 @@ import {
 import { FindTab, type DecidedGame } from "./components/FindTab";
 import { GameLinesTab } from "./components/GameLinesTab";
 import { GuideTab } from "./components/GuideTab";
+import { InsightsTab } from "./components/InsightsTab";
+import { ScenarioTab } from "./components/ScenarioTab";
 import { LineShopTab } from "./components/LineShopTab";
 import { ModelTab } from "./components/ModelTab";
 import { PortfolioTab } from "./components/PortfolioTab";
@@ -23,12 +25,15 @@ import { StreetTab } from "./components/StreetTab";
 import { TeamsTab } from "./components/TeamsTab";
 import { LiveDot } from "./components/ui";
 
-type Tab = "find" | "games" | "teams" | "street" | "lines" | "portfolio" | "model" | "guide";
+type Tab =
+  | "find" | "games" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
   { key: "games", label: "Game Lines" },
   { key: "teams", label: "Teams" },
+  { key: "scenarios", label: "Scenarios" },
+  { key: "insights", label: "Insights" },
   { key: "street", label: "Vs. Street" },
   { key: "lines", label: "Line Shop" },
   { key: "portfolio", label: "Portfolio" },
@@ -305,6 +310,22 @@ export default function Home() {
             adjustments={adjustments}
             decidedGames={decidedGames}
             qbOverrides={qbOverrides}
+          />
+        )}
+        {tab === "scenarios" && (
+          <ScenarioTab
+            schedule={schedule}
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
+          />
+        )}
+        {tab === "insights" && (
+          <InsightsTab
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
+            customBoard={customBoard}
           />
         )}
         {tab === "street" && (
