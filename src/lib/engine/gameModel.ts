@@ -143,7 +143,7 @@ export function buildWinProbMatrices(
   adjustPts: Float64Array,
   passOffDelta?: Float64Array,
   unitsOverride?: Record<string, UnitProfile> | null,
-): { home: Float64Array; neutral: Float64Array } {
+): { home: Float64Array; neutral: Float64Array; marginHome: Float64Array } {
   const T = teams.length;
   const off = teams.map((t, i) => {
     const u = unitsOverride?.[t.id] ?? unitsFor(t.id);
@@ -159,15 +159,24 @@ export function buildWinProbMatrices(
   }
   const home = new Float64Array(T * T);
   const neutral = new Float64Array(T * T);
+  const marginHome = new Float64Array(T * T);
   for (let h = 0; h < T; h++) {
     for (let a = 0; a < T; a++) {
       if (h === a) continue;
       const margin = epaVs[h * T + a] - epaVs[a * T + h] + adjustPts[h] - adjustPts[a];
       home[h * T + a] = normCdf((margin + HFA_PTS) / MARGIN_SD);
       neutral[h * T + a] = normCdf(margin / MARGIN_SD);
+      marginHome[h * T + a] = margin + HFA_PTS;
     }
   }
-  return { home, neutral };
+  return { home, neutral, marginHome };
+}
+
+export const GAME_MARGIN_SD = MARGIN_SD;
+
+/** P(actual home margin exceeds x) under the model's margin distribution. */
+export function probMarginOver(expectedMargin: number, x: number): number {
+  return normCdf((expectedMargin - x) / MARGIN_SD);
 }
 
 export function eloToPts(elo: number): number {

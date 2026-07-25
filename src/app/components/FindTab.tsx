@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fmtAmerican, fmtMoney, fmtOdds, fmtPct } from "@/lib/format";
 import {
   MARKETS,
@@ -105,6 +105,19 @@ export function FindTab({
   const [saved, setSaved] = useState<SavedSearch[]>(() => loadLS("nfl-saved-searches", []));
   const [saveName, setSaveName] = useState("");
   const [runningAlerts, setRunningAlerts] = useState(false);
+  const [cronAlerts, setCronAlerts] = useState<{
+    at: number;
+    items: { id: string; name: string; count: number; topEv: number | null; triggered: boolean }[];
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/alerts")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.at) setCronAlerts(d);
+      })
+      .catch(() => {});
+  }, []);
 
   const [seasonWeek, setSeasonWeek] = useState(1);
   const [syncing, setSyncing] = useState(false);
@@ -673,16 +686,24 @@ export function FindTab({
             </div>
             <div className="mt-2.5 space-y-1.5">
               {saved.map((s) => {
+                // Prefer the daily cron's sweep when it's fresher than the
+                // last manual check.
+                const cron = cronAlerts?.items.find((i) => i.id === s.id);
+                const useCron = cron && (!s.lastRun || (cronAlerts?.at ?? 0) > s.lastRun);
+                const lastRun = useCron ? cronAlerts!.at : s.lastRun;
+                const lastCount = useCron ? cron.count : s.lastCount;
+                const lastTopEv = useCron ? cron.topEv : s.lastTopEv;
                 const alerting =
-                  s.lastTopEv != null && s.lastTopEv >= s.alertMinEv && (s.lastCount ?? 0) > 0;
+                  lastTopEv != null && lastTopEv >= s.alertMinEv && (lastCount ?? 0) > 0;
                 return (
                   <div key={s.id} className="flex items-center justify-between rounded-lg bg-bg px-3 py-2 text-xs">
                     <div className="flex items-center gap-2">
                       {alerting && <span className="live-dot inline-block h-2 w-2 rounded-full bg-up" title="Alert: EV above threshold" />}
                       <span className="font-semibold">{s.name}</span>
-                      {s.lastRun && (
+                      {lastRun && (
                         <span className="tnum font-mono text-ink-3">
-                          {s.lastCount} hits{s.lastTopEv != null && ` · top EV ${fmtPct(s.lastTopEv, 0)}`}
+                          {lastCount} hits{lastTopEv != null && ` · top EV ${fmtPct(lastTopEv, 0)}`}
+                          {useCron && <span className="ml-1 text-brand" title="From the daily automatic sweep">auto</span>}
                         </span>
                       )}
                     </div>
@@ -768,6 +789,7 @@ export function FindTab({
             parlay={p}
             rank={i + 1}
             bankroll={bankroll}
+            anchorWeight={anchorWeight}
             copied={copied === i}
             added={added === i}
             onCopy={() => copySlip(p, i)}
@@ -814,6 +836,7 @@ function ParlayCard({
   parlay: p,
   rank,
   bankroll,
+  anchorWeight,
   copied,
   added,
   onCopy,
@@ -822,12 +845,14 @@ function ParlayCard({
   parlay: Parlay;
   rank: number;
   bankroll: number;
+  anchorWeight: number;
   copied: boolean;
   added: boolean;
   onCopy: () => void;
   onAdd: () => void;
 }) {
   const [quote, setQuote] = useState("");
+  const [logState, setLogState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const stake = bankroll * p.kellyFraction;
   const toWin = stake * (p.combinedDecimal - 1);
   const anchored = Math.abs(p.anchoredProb - p.jointProb) > 0.0005;
@@ -842,6 +867,37 @@ function ParlayCard({
   const quoted = parseAmerican(quote);
   const quotedDec = quoted == null ? null : quoted > 0 ? 1 + quoted / 100 : 1 + 100 / -quoted;
   const quotedEv = quotedDec == null ? null : p.anchoredProb * quotedDec - 1;
+
+  async function logBet() {
+    setLogState("saving");
+    try {
+      const res = await fetch("/api/bets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          legs: p.legs.map((l) => ({
+            id: l.id,
+            label: l.label,
+            market: l.market,
+            teamId: l.teamId,
+            americanOdds: l.americanOdds,
+            impliedProb: l.impliedProb,
+            modelProb: l.modelProb,
+            marketProb: l.marketProb,
+          })),
+          stake: Math.max(1, Math.round(stake)),
+          priceAmerican: quoted ?? p.combinedAmerican,
+          jointProb: p.jointProb,
+          anchoredProb: p.anchoredProb,
+          anchorWeight,
+        }),
+      });
+      setLogState(res.ok ? "done" : "error");
+    } catch {
+      setLogState("error");
+    }
+    setTimeout(() => setLogState("idle"), 2000);
+  }
 
   return (
     <Card hover className="p-4">
@@ -952,6 +1008,14 @@ function ParlayCard({
               </span>
             )}
           </span>
+          <button
+            onClick={logBet}
+            disabled={logState === "saving"}
+            className="rounded-lg border border-line px-3 py-1.5 font-semibold text-ink-2 transition-colors hover:border-warn/60 hover:text-warn disabled:opacity-50"
+            title="Record this bet (model probability + price) for calibration and CLV tracking. Uses the FD quote box if filled, else the board price."
+          >
+            {logState === "done" ? "Logged ✓" : logState === "error" ? "Log failed" : logState === "saving" ? "Logging…" : "Log bet"}
+          </button>
           <button
             onClick={onAdd}
             className="rounded-lg border border-line px-3 py-1.5 font-semibold text-ink-2 transition-colors hover:border-up-dim/60 hover:text-up"

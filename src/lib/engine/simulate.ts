@@ -88,6 +88,30 @@ export function runSimulation(
     ? games.map((_, gi) => decided.get(`${gHome[gi]}|${gAway[gi]}`) ?? -1)
     : null;
 
+  // Tiebreaker prep: which games are division/conference games, the game
+  // indices for each team pair (head-to-head), and per-team conference game
+  // counts (for conference-record percentage).
+  const gIsDiv = new Uint8Array(G);
+  const gIsConf = new Uint8Array(G);
+  const pairGames = new Map<number, number[]>(); // lo*64+hi -> game indices
+  const confGameCount = new Int16Array(T);
+  for (let gi = 0; gi < G; gi++) {
+    const h = gHome[gi];
+    const a = gAway[gi];
+    const sameConf = teams[h].conference === teams[a].conference;
+    const sameDiv = sameConf && teams[h].division === teams[a].division;
+    gIsConf[gi] = sameConf ? 1 : 0;
+    gIsDiv[gi] = sameDiv ? 1 : 0;
+    if (sameConf) {
+      confGameCount[h]++;
+      confGameCount[a]++;
+    }
+    const key = Math.min(h, a) * 64 + Math.max(h, a);
+    const list = pairGames.get(key) ?? [];
+    list.push(gi);
+    pairGames.set(key, list);
+  }
+
   const winCounts = new Int16Array(T * N);
   const wonDivision = new Uint8Array(T * N);
   const madePlayoffs = new Uint8Array(T * N);
@@ -96,26 +120,56 @@ export function runSimulation(
 
   const rnd = mulberry32(seed);
   const wins = new Int16Array(T);
+  const divWins = new Int16Array(T);
+  const confWins = new Int16Array(T);
+  const winnerOf = new Int32Array(G); // per-sim game winners for H2H lookups
   const tiebreak = new Float64Array(T);
 
   for (let s = 0; s < N; s++) {
     wins.fill(0);
+    divWins.fill(0);
+    confWins.fill(0);
     // Regular season.
     for (let gi = 0; gi < G; gi++) {
-      if (gDecided) {
-        const w = gDecided[gi];
-        if (w >= 0) {
-          wins[w]++;
-          continue;
-        }
-      }
-      if (rnd() < gProb[gi]) wins[gHome[gi]]++;
-      else wins[gAway[gi]]++;
+      let w: number;
+      if (gDecided && gDecided[gi] >= 0) w = gDecided[gi];
+      else w = rnd() < gProb[gi] ? gHome[gi] : gAway[gi];
+      winnerOf[gi] = w;
+      wins[w]++;
+      if (gIsDiv[gi]) divWins[w]++;
+      if (gIsConf[gi]) confWins[w]++;
     }
     for (let t = 0; t < T; t++) {
       winCounts[t * N + s] = wins[t];
-      tiebreak[t] = rnd(); // random tiebreak proxy for this sim
+      tiebreak[t] = rnd(); // last-resort tiebreak (coin flip)
     }
+
+    // NFL-style tiebreak comparator (pairwise approximation of the official
+    // procedure): head-to-head, then division record (same-division ties),
+    // then conference record, then a coin flip.
+    const tieCmp = (xIdx: number, yIdx: number): number => {
+      const key = Math.min(xIdx, yIdx) * 64 + Math.max(xIdx, yIdx);
+      const h2hGames = pairGames.get(key);
+      if (h2hGames) {
+        let xH2h = 0;
+        for (const gi of h2hGames) {
+          if (winnerOf[gi] === xIdx) xH2h++;
+          else xH2h--;
+        }
+        if (xH2h !== 0) return -xH2h; // negative = x ranks first
+      }
+      if (
+        teams[xIdx].conference === teams[yIdx].conference &&
+        teams[xIdx].division === teams[yIdx].division &&
+        divWins[xIdx] !== divWins[yIdx]
+      ) {
+        return divWins[yIdx] - divWins[xIdx];
+      }
+      const xConf = confWins[xIdx] / Math.max(1, confGameCount[xIdx]);
+      const yConf = confWins[yIdx] / Math.max(1, confGameCount[yIdx]);
+      if (xConf !== yConf) return yConf - xConf;
+      return tiebreak[yIdx] - tiebreak[xIdx];
+    };
 
     // Standings + playoffs per conference.
     let afcChamp = 0;
@@ -133,7 +187,7 @@ export function runSimulation(
         });
       }
       const cmp = (x: Standing, y: Standing) =>
-        y.wins - x.wins || y.tiebreak - x.tiebreak;
+        y.wins - x.wins || tieCmp(x.idx, y.idx);
 
       const byDiv: Record<string, Standing[]> = {};
       for (const st of standings) (byDiv[st.division] ??= []).push(st);

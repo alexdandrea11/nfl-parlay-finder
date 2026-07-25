@@ -14,6 +14,7 @@ import {
   type TeamMeta,
 } from "./clientTypes";
 import { FindTab, type DecidedGame } from "./components/FindTab";
+import { GameLinesTab } from "./components/GameLinesTab";
 import { GuideTab } from "./components/GuideTab";
 import { LineShopTab } from "./components/LineShopTab";
 import { ModelTab } from "./components/ModelTab";
@@ -22,10 +23,11 @@ import { StreetTab } from "./components/StreetTab";
 import { TeamsTab } from "./components/TeamsTab";
 import { LiveDot } from "./components/ui";
 
-type Tab = "find" | "teams" | "street" | "lines" | "portfolio" | "model" | "guide";
+type Tab = "find" | "games" | "teams" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
+  { key: "games", label: "Game Lines" },
   { key: "teams", label: "Teams" },
   { key: "street", label: "Vs. Street" },
   { key: "lines", label: "Line Shop" },
@@ -103,6 +105,75 @@ export default function Home() {
         setModelBuiltAt(d.modelMeta?.generatedAt ?? null);
       })
       .catch(() => {});
+  }, []);
+
+  // Cross-device sync: all app state (board, tickets, QB swaps, adjustments,
+  // saved searches) mirrors to a cloud doc. On load, a newer remote copy
+  // replaces localStorage and reloads once; afterwards local changes push up
+  // every 20s when something actually changed. Last write wins.
+  useEffect(() => {
+    const KEYS = [
+      "nfl-price-board",
+      "nfl-tickets",
+      "nfl-qb-overrides",
+      "nfl-adjustments",
+      "nfl-decided-games",
+      "nfl-saved-searches",
+      "nfl-auto-sync",
+    ];
+    const serialize = () => {
+      const kv: Record<string, unknown> = {};
+      for (const k of KEYS) {
+        const raw = localStorage.getItem(k);
+        if (raw != null) {
+          try {
+            kv[k] = JSON.parse(raw);
+          } catch {
+            /* skip */
+          }
+        }
+      }
+      return kv;
+    };
+    let lastPushed = "";
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    fetch("/api/state")
+      .then((r) => r.json())
+      .then((remote: { kv?: Record<string, unknown>; updatedAt?: number }) => {
+        const localTs = Number(localStorage.getItem("nfl-sync-ts") ?? 0);
+        if (remote?.updatedAt && remote.updatedAt > localTs && remote.kv) {
+          for (const [k, v] of Object.entries(remote.kv)) {
+            if (KEYS.includes(k)) localStorage.setItem(k, JSON.stringify(v));
+          }
+          localStorage.setItem("nfl-sync-ts", String(remote.updatedAt));
+          window.location.reload();
+          return;
+        }
+        lastPushed = JSON.stringify(serialize());
+        timer = setInterval(async () => {
+          const now = JSON.stringify(serialize());
+          if (now === lastPushed) return;
+          try {
+            const res = await fetch("/api/state", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ kv: JSON.parse(now) }),
+            });
+            const d = await res.json();
+            if (d?.updatedAt) {
+              localStorage.setItem("nfl-sync-ts", String(d.updatedAt));
+              lastPushed = now;
+            }
+          } catch {
+            /* retry next tick */
+          }
+        }, 20000);
+      })
+      .catch(() => {});
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   // Auto-sync real results on load: played games override manual entries for
@@ -227,6 +298,13 @@ export default function Home() {
             qbStarters={qbStarters}
             qbOverrides={qbOverrides}
             setQbOverrides={setQbOverrides}
+          />
+        )}
+        {tab === "games" && (
+          <GameLinesTab
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
           />
         )}
         {tab === "street" && (
