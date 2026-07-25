@@ -154,11 +154,25 @@ export function TeamsTab({
               <SectionTitle>Projected win distribution · {detail.sims.toLocaleString()} seasons</SectionTitle>
               <WinDistChart dist={detail.winDist} />
               <SectionTitle>Playoff probability if they win exactly k games</SectionTitle>
-              <CondChart dist={detail.winDist} />
+              <CondChart
+                dist={detail.winDist}
+                value={(d) => d.pPlayoffsGiven}
+                colorClass="bg-chart-green"
+                outcome="make playoffs"
+              />
+              <SectionTitle>Division win probability if they win exactly k games</SectionTitle>
+              <CondChart
+                dist={detail.winDist}
+                value={(d) => d.pDivisionGiven}
+                colorClass="bg-chart-amber"
+                outcome="win the division"
+              />
               <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
-                The second chart is the "how many wins do they need" answer — it already accounts
-                for this division and the rest of the conference, because both are read from the
-                same simulated seasons.
+                The conditional charts are the "how many wins do they need" answer — for a
+                wild-card spot vs the division crown. Both already account for this division and
+                the rest of the conference, because they're read from the same simulated seasons.
+                The division bar sits lower at every win count: rivals can match a win total, but
+                only one team takes the crown.
               </p>
             </Card>
 
@@ -314,29 +328,42 @@ function WinDistChart({ dist }: { dist: WinDistRow[] }) {
   );
 }
 
-function CondChart({ dist }: { dist: WinDistRow[] }) {
+function CondChart({
+  dist,
+  value,
+  colorClass,
+  outcome,
+}: {
+  dist: WinDistRow[];
+  value: (d: WinDistRow) => number | null;
+  colorClass: string;
+  outcome: string;
+}) {
   return (
-    <div className="mb-1 mt-3">
+    <div className="mb-4 mt-3">
       <div className="flex items-end gap-1" style={{ height: 90 }}>
-        {dist.map((d) => (
-          <div
-            key={d.wins}
-            className="group relative flex-1"
-            title={
-              d.pPlayoffsGiven == null
-                ? `${d.wins} wins: never happened in the sims`
-                : `${d.wins} wins → ${fmtPct(d.pPlayoffsGiven, 0)} make playoffs, ${fmtPct(d.pDivisionGiven ?? 0, 0)} win division`
-            }
-          >
+        {dist.map((d) => {
+          const v = value(d);
+          return (
             <div
-              className="w-full rounded-t bg-chart-green transition-opacity group-hover:opacity-100"
-              style={{ height: `${(d.pPlayoffsGiven ?? 0) * 84}px`, opacity: d.pPlayoffsGiven == null ? 0.15 : 0.85 }}
-            />
-            <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
-              {d.pPlayoffsGiven == null ? "—" : fmtPct(d.pPlayoffsGiven, 0)}
-            </span>
-          </div>
-        ))}
+              key={d.wins}
+              className="group relative flex-1"
+              title={
+                v == null
+                  ? `${d.wins} wins: never happened in the sims`
+                  : `${d.wins} wins → ${fmtPct(v, 0)} ${outcome}`
+              }
+            >
+              <div
+                className={`w-full rounded-t transition-opacity group-hover:opacity-100 ${colorClass}`}
+                style={{ height: `${(v ?? 0) * 84}px`, opacity: v == null ? 0.15 : 0.85 }}
+              />
+              <span className="tnum absolute -top-4 left-1/2 hidden -translate-x-1/2 font-mono text-[9px] text-ink-2 group-hover:block">
+                {v == null ? "—" : fmtPct(v, 0)}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <div className="tnum mt-1 flex gap-1 border-t border-line pt-1 font-mono text-[9px] text-ink-3">
         {dist.map((d) => (
