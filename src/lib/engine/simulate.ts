@@ -1,4 +1,4 @@
-import { buildWinProbMatrices, eloToPts, qbPassOffDelta, SCHEDULE } from "./gameModel";
+import { buildWinProbMatrices, eloToPts, qbPassOffDelta, SCHEDULE, type UnitProfile } from "./gameModel";
 import { mulberry32 } from "./random";
 import type { Conference, EngineOptions, Team } from "./types";
 
@@ -32,6 +32,7 @@ export function runSimulation(
   sims: number,
   seed = 20250901,
   options: EngineOptions = {},
+  unitsOverride: Record<string, UnitProfile> | null = null,
 ): SimResult {
   const N = sims;
   const T = teams.length;
@@ -57,6 +58,7 @@ export function runSimulation(
     teams,
     adjustPts,
     passOffDelta,
+    unitsOverride,
   );
 
   // Real schedule → per-game home-team win probability, precomputed once.

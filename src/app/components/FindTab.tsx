@@ -58,6 +58,8 @@ export function FindTab({
   qbs,
   schedule,
   customBoard,
+  autoSync,
+  setAutoSync,
   onAddTicket,
 }: {
   teams: TeamMeta[];
@@ -70,6 +72,8 @@ export function FindTab({
   qbs: QbInfo[];
   schedule: ScheduledGame[];
   customBoard: CustomBoard;
+  autoSync: boolean;
+  setAutoSync: (v: boolean) => void;
   onAddTicket: (t: SavedTicket) => void;
 }) {
   const [minLegs, setMinLegs] = useState(2);
@@ -574,7 +578,18 @@ export function FindTab({
                   disabled={syncing}
                   className="rounded-lg bg-brand/15 px-3 py-1.5 text-xs font-bold text-brand transition-colors hover:bg-brand/25 disabled:opacity-50"
                 >
-                  {syncing ? "Syncing…" : "⟳ Sync real results"}
+                  {syncing ? "Syncing…" : "⟳ Sync now"}
+                </button>
+                <button
+                  onClick={() => setAutoSync(!autoSync)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    autoSync
+                      ? "border-up-dim/60 bg-up/10 text-up"
+                      : "border-line text-ink-3 hover:border-line-2"
+                  }`}
+                  title="Automatically pull played-game results every time the app loads"
+                >
+                  Auto-sync {autoSync ? "on" : "off"}
                 </button>
                 {decidedGames.length > 0 && (
                   <button

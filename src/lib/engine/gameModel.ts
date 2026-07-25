@@ -142,10 +142,11 @@ export function buildWinProbMatrices(
   teams: Team[],
   adjustPts: Float64Array,
   passOffDelta?: Float64Array,
+  unitsOverride?: Record<string, UnitProfile> | null,
 ): { home: Float64Array; neutral: Float64Array } {
   const T = teams.length;
   const off = teams.map((t, i) => {
-    const u = unitsFor(t.id);
+    const u = unitsOverride?.[t.id] ?? unitsFor(t.id);
     const d = passOffDelta?.[i] ?? 0;
     return d === 0 ? u : { ...u, passOff: u.passOff + d };
   });
@@ -174,7 +175,7 @@ export function eloToPts(elo: number): number {
 }
 
 /** Single-number power rating (expected margin vs an average team, neutral). */
-export function powerPts(teamId: string): number {
-  const u = unitsFor(teamId);
+export function powerPts(teamId: string, unitsOverride?: Record<string, UnitProfile> | null): number {
+  const u = unitsOverride?.[teamId] ?? unitsFor(teamId);
   return offenseEpaVs(u, LEAGUE) - offenseEpaVs(LEAGUE, u);
 }

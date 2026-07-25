@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { getExperts } from "@/lib/data/freshness";
 import { parseCustomBoard } from "@/lib/engine/customBoard";
 import { getEngineView } from "@/lib/engine/engineCache";
-import { EXPERTS, powerPts } from "@/lib/engine/gameModel";
+import { powerPts } from "@/lib/engine/gameModel";
 import { probToAmerican } from "@/lib/engine/odds";
 import type { DecidedGame, EngineOptions, RatingAdjustment } from "@/lib/engine/types";
 
@@ -38,7 +39,11 @@ export async function POST(req: Request) {
           ? (body.qbOverrides as Record<string, string>)
           : {},
     };
-    const engine = await getEngineView(options, parseCustomBoard(body.customBoard));
+    const [engine, experts] = await Promise.all([
+      getEngineView(options, parseCustomBoard(body.customBoard)),
+      getExperts(),
+    ]);
+    const EXPERTS = experts.data;
     const { sim } = engine;
     const N = sim.N;
 
@@ -61,7 +66,7 @@ export async function POST(req: Request) {
         name: t.name,
         conference: t.conference,
         division: t.division,
-        power: Math.round(powerPts(t.id) * 10) / 10,
+        power: Math.round(powerPts(t.id, engine.units) * 10) / 10,
         fpi: exp?.fpi ?? null,
         meanWins: wins / N,
         fpiProjWins: exp?.projWins ?? null,
@@ -119,8 +124,14 @@ export async function POST(req: Request) {
     return NextResponse.json({
       teams: teams.sort((a, b) => b.power - a.power),
       experts: EXPERTS
-        ? { source: EXPERTS.source, season: EXPERTS.season, updatedAt: EXPERTS.updatedAt }
+        ? {
+            source: EXPERTS.source,
+            season: EXPERTS.season,
+            updatedAt: EXPERTS.updatedAt,
+            live: experts.live,
+          }
         : null,
+      freshness: engine.freshness,
       agreement: { powerVsFpi, winsVsFpi, winsGap },
       outliers,
       scatter,

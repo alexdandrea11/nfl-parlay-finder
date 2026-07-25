@@ -57,6 +57,12 @@ export default function Home() {
   const [customBoard, setCustomBoardRaw] = useState<CustomBoard>(() =>
     loadLS("nfl-price-board", {}),
   );
+  const [autoSync, setAutoSyncRaw] = useState<boolean>(() => loadLS("nfl-auto-sync", true));
+  const [freshness, setFreshness] = useState<{
+    seasonStatsWeek: number | null;
+    seasonStatsFetchedAt: number | null;
+  } | null>(null);
+  const [modelBuiltAt, setModelBuiltAt] = useState<string | null>(null);
 
   const setAdjustments = (a: Adjustment[]) => {
     setAdjustmentsRaw(a);
@@ -78,6 +84,10 @@ export default function Home() {
     setCustomBoardRaw(b);
     saveLS("nfl-price-board", b);
   };
+  const setAutoSync = (v: boolean) => {
+    setAutoSyncRaw(v);
+    saveLS("nfl-auto-sync", v);
+  };
 
   useEffect(() => {
     fetch("/api/meta")
@@ -89,9 +99,32 @@ export default function Home() {
         setQbs(d.qbs ?? []);
         setQbStarters(d.qbStarters ?? {});
         setSchedule(d.schedule ?? []);
+        setFreshness(d.freshness ?? null);
+        setModelBuiltAt(d.modelMeta?.generatedAt ?? null);
       })
       .catch(() => {});
   }, []);
+
+  // Auto-sync real results on load: played games override manual entries for
+  // the same matchup; manual entries for unplayed games are kept.
+  useEffect(() => {
+    if (!autoSync) return;
+    fetch("/api/season-sync")
+      .then((r) => r.json())
+      .then((d) => {
+        const synced: DecidedGame[] = d.decidedGames ?? [];
+        if (synced.length === 0) return;
+        setDecidedGamesRaw((prev) => {
+          const key = (g: DecidedGame) => `${g.homeId}|${g.awayId}`;
+          const syncedKeys = new Set(synced.map(key));
+          const merged = [...synced, ...prev.filter((g) => !syncedKeys.has(key(g)))];
+          saveLS("nfl-decided-games", merged);
+          return merged;
+        });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSync]);
 
   const isLive = oddsMeta?.source === "live";
   const fetchedAgo =
@@ -180,6 +213,8 @@ export default function Home() {
             qbs={qbs}
             schedule={schedule}
             customBoard={customBoard}
+            autoSync={autoSync}
+            setAutoSync={setAutoSync}
             onAddTicket={(t) => setTickets([...tickets, t])}
           />
         )}
@@ -227,6 +262,14 @@ export default function Home() {
       </main>
 
       <footer className="mx-auto max-w-[1440px] px-5 pb-10 pt-2 text-[11px] leading-relaxed text-ink-3">
+        <span className="tnum font-mono">
+          Data: priors 2023–25{modelBuiltAt && ` (built ${modelBuiltAt.slice(0, 10)})`} ·{" "}
+          {freshness?.seasonStatsWeek
+            ? `in-season stats through wk ${freshness.seasonStatsWeek} (auto-refreshes)`
+            : "preseason — in-season stats will blend in automatically"}{" "}
+          · experts refresh 12h · odds 6h{autoSync ? " · results auto-sync on" : ""}
+        </span>
+        <br />
         {isLive
           ? "Super Bowl prices are live from your odds feed; other futures markets use modeled sample prices until the feed covers them. "
           : "Running on seeded sample odds and model ratings — not live FanDuel prices. "}

@@ -42,7 +42,7 @@ interface ScatterPoint {
 
 interface StreetResponse {
   teams: StreetTeam[];
-  experts: { source: string; season: number; updatedAt: string | null } | null;
+  experts: { source: string; season: number; updatedAt: string | null; live?: boolean } | null;
   agreement: { powerVsFpi: number; winsVsFpi: number; winsGap: number };
   outliers: Outlier[];
   scatter: ScatterPoint[];
@@ -105,6 +105,8 @@ export function StreetTab({
           {data.experts && (
             <span className="tnum font-mono text-[10px] text-ink-3">
               experts = {data.experts.source} {data.experts.season}
+              {data.experts.updatedAt && ` · updated ${data.experts.updatedAt.slice(0, 10)}`}
+              {data.experts.live ? " · refreshed live" : " · baked snapshot"}
             </span>
           )}
         </div>

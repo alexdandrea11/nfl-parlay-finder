@@ -14,7 +14,7 @@ export async function GET() {
       conference: t.conference,
       division: t.division,
       // Expected margin vs an average team on a neutral field (points).
-      rating: Math.round(powerPts(t.id) * 10) / 10,
+      rating: Math.round(powerPts(t.id, engine.units) * 10) / 10,
     }))
     .sort((a, b) => b.rating - a.rating);
 
@@ -45,6 +45,7 @@ export async function GET() {
     sims: engine.sims,
     oddsMeta: engine.oddsMeta,
     modelMeta: MODEL_META,
+    freshness: engine.freshness,
     qbs: QBS,
     qbStarters: QB_STARTERS,
     schedule: SCHEDULE,

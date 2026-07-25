@@ -1,6 +1,8 @@
 import { TEAMS } from "../data/teams";
+import { blendUnits, getSeasonOverlay } from "../data/freshness";
 import { getOddsMap, type OddsResult } from "../data/oddsSource";
 import { applyBoard, boardIsEmpty, boardWinLines } from "./customBoard";
+import { unitsFor, type UnitProfile } from "./gameModel";
 import {
   assembleLegs,
   computeConsensus,
@@ -22,6 +24,12 @@ export interface OddsMeta {
   quotaRemaining: number | null;
 }
 
+export interface Freshness {
+  /** Week the in-season stats run through, or null preseason. */
+  seasonStatsWeek: number | null;
+  seasonStatsFetchedAt: number | null;
+}
+
 export interface Engine {
   sim: SimResult;
   legs: Leg[];
@@ -29,6 +37,9 @@ export interface Engine {
   sims: number;
   options: EngineOptions;
   oddsMeta: OddsMeta;
+  /** Effective unit profiles (priors blended with this season), if blending is active. */
+  units: Record<string, UnitProfile> | null;
+  freshness: Freshness;
 }
 
 interface BaseEngine extends Engine {
@@ -45,7 +56,15 @@ const variants = new Map<string, Engine>();
 const MAX_VARIANTS = 24;
 
 async function buildBase(): Promise<BaseEngine> {
-  const sim = runSimulation(TEAMS, SIMS);
+  // In-season overlay: blend this season's actual EPA into the priors with a
+  // games-played weight. Null preseason (data doesn't exist yet).
+  const overlay = await getSeasonOverlay();
+  const units = blendUnits(unitsFor, TEAMS.map((t) => t.id), overlay);
+  const freshness: Freshness = {
+    seasonStatsWeek: overlay?.maxWeek ?? null,
+    seasonStatsFetchedAt: overlay?.fetchedAt ?? null,
+  };
+  const sim = runSimulation(TEAMS, SIMS, 20250901, {}, units);
   const lines = computeWinLines(sim, TEAMS);
   const metas = enumerateLegs(sim, TEAMS, lines);
   const odds: OddsResult = await getOddsMap(metas);
@@ -57,6 +76,8 @@ async function buildBase(): Promise<BaseEngine> {
     teams: TEAMS,
     sims: SIMS,
     options: {},
+    units,
+    freshness,
     oddsMap: odds.map,
     consensus,
     liveIds: odds.liveIds,
@@ -115,7 +136,7 @@ export async function getEngine(options: EngineOptions = {}): Promise<Engine> {
   const hit = variants.get(key);
   if (hit) return hit;
 
-  const sim = runSimulation(TEAMS, SIMS, 20250901, options);
+  const sim = runSimulation(TEAMS, SIMS, 20250901, options, b.units);
   // Reuse the BASE win lines, odds, and consensus so only the model moves.
   const metas = enumerateLegs(sim, TEAMS, b.lines);
   const legs = assembleLegs(metas, b.oddsMap, b.consensus, b.liveIds);
@@ -125,6 +146,8 @@ export async function getEngine(options: EngineOptions = {}): Promise<Engine> {
     teams: TEAMS,
     sims: SIMS,
     options,
+    units: b.units,
+    freshness: b.freshness,
     oddsMeta: b.oddsMeta,
   };
 

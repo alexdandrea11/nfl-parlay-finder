@@ -83,13 +83,13 @@ export async function POST(req: Request) {
           meanWins: rWins / N,
           pPlayoffs: rPlayoffs / N,
           pDivision: rDivision / N,
-          power: Math.round(powerPts(t.id) * 10) / 10,
+          power: Math.round(powerPts(t.id, engine.units) * 10) / 10,
         };
       })
       .sort((a, b) => b.meanWins - a.meanWins);
 
-    // Unit profile vs league.
-    const u = unitsFor(teamId);
+    // Unit profile vs league (in-season blended when available).
+    const u = engine.units?.[teamId] ?? unitsFor(teamId);
     const lg = leagueMean();
     const units = {
       passOff: u.passOff,
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
       pDivision: division / N,
       pConference: conference / N,
       pSuperbowl: superbowl / N,
-      power: Math.round(powerPts(teamId) * 10) / 10,
+      power: Math.round(powerPts(teamId, engine.units) * 10) / 10,
       winDist,
       rivals,
       units,
