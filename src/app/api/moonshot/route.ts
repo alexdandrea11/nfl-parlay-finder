@@ -19,6 +19,9 @@ export async function POST(req: Request) {
     const stake = Math.max(1, Number(body.stake) || 100);
     const targetMultiple = Math.min(5000, Math.max(20, Number(body.targetMultiple) || 300));
     const maxLegs = Math.min(8, Math.max(2, Math.round(Number(body.maxLegs) || 6)));
+    // FanDuel blocks correlated same-team futures combos at the slip; the
+    // placeable mode (default) restricts to one leg per team.
+    const placeable = body.placeable !== false;
     const options: EngineOptions = {
       adjustments: Array.isArray(body.adjustments) ? (body.adjustments as RatingAdjustment[]) : [],
       decidedGames: Array.isArray(body.decidedGames) ? (body.decidedGames as DecidedGame[]) : [],
@@ -33,7 +36,9 @@ export async function POST(req: Request) {
     const sbLegs = engine.legs
       .filter((l) => l.market === "superbowl")
       .sort((a, b) => b.modelProb - a.modelProb);
-    const topTeams = sbLegs.slice(0, 6).map((l) => l.teamId);
+    // Placeable mode needs team VARIETY (one leg per team) to stack payout,
+    // so widen the ladder pool; correlated mode concentrates on top teams.
+    const topTeams = sbLegs.slice(0, placeable ? 12 : 6).map((l) => l.teamId);
     const ladder = engine.legs.filter(
       (l) =>
         topTeams.includes(l.teamId) &&
@@ -52,12 +57,12 @@ export async function POST(req: Request) {
       markets: ["division", "playoffs", "conference", "superbowl", "winsOver", "winsUnder"],
       includeTeams: [],
       excludeTeams: [],
-      maxLegsPerTeam: 4,
+      maxLegsPerTeam: placeable ? 1 : 4,
       minWinProb: 0,
       minEv: -1,
       minPayoutAmerican: targetAmerican,
       maxPayoutAmerican: null,
-      allowCorrelated: true,
+      allowCorrelated: !placeable,
       anchorWeight: 0, // pure model conviction, as requested
       maxDivergence: null,
       requireLineShopEdge: false,

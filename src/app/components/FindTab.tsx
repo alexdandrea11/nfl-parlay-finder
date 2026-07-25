@@ -123,6 +123,7 @@ export function FindTab({
   const [moonMultiple, setMoonMultiple] = useState(300);
   const [moonResult, setMoonResult] = useState<{ parlays: Parlay[]; targetAmerican: number } | null>(null);
   const [moonLoading, setMoonLoading] = useState(false);
+  const [moonPlaceable, setMoonPlaceable] = useState(true);
   const [seasonWeek, setSeasonWeek] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -289,6 +290,7 @@ export function FindTab({
         body: JSON.stringify({
           stake: moonStake,
           targetMultiple: moonMultiple,
+          placeable: moonPlaceable,
           adjustments,
           decidedGames,
           qbOverrides,
@@ -563,6 +565,16 @@ export function FindTab({
               ))}
             </select>
           </div>
+          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink-2">
+            <input
+              type="checkbox"
+              checked={moonPlaceable}
+              onChange={(e) => setMoonPlaceable(e.target.checked)}
+              className="accent-[#f5c542]"
+            />
+            FanDuel-placeable only (one leg per team — books block same-team
+            correlated combos at the slip)
+          </label>
           <button
             onClick={runMoonshot}
             disabled={moonLoading}
