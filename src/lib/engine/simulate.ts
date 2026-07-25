@@ -22,6 +22,8 @@ export interface SimResult {
   wonSuperbowl: Uint8Array;
   /** Times each team landed each playoff seed: [teamIdx*7 + (seed-1)]. */
   seedCounts: Int32Array;
+  /** Per-sim home-win bitsets for the next undecided week's games. */
+  trackedGames: { homeId: string; awayId: string; week: number; homeBits: Uint32Array }[];
 }
 
 interface Standing {
@@ -126,6 +128,24 @@ export function runSimulation(
     pairGames.set(key, list);
   }
 
+  // Track per-sim outcomes for the earliest week that still has undecided
+  // games — powers the leverage board ("which game swings what").
+  let trackWeek = Infinity;
+  for (let gi = 0; gi < G; gi++) {
+    if (!gDecided || gDecided[gi] < 0) trackWeek = Math.min(trackWeek, games[gi].week);
+  }
+  const trackedIdx: number[] = [];
+  for (let gi = 0; gi < G; gi++) {
+    if (games[gi].week === trackWeek && (!gDecided || gDecided[gi] < 0)) trackedIdx.push(gi);
+  }
+  const words = (N + 31) >>> 5;
+  const trackedGames = trackedIdx.map((gi) => ({
+    homeId: games[gi].home,
+    awayId: games[gi].away,
+    week: games[gi].week,
+    homeBits: new Uint32Array(words),
+  }));
+
   const winCounts = new Int16Array(T * N);
   const seedCounts = new Int32Array(T * 7);
   const wonDivision = new Uint8Array(T * N);
@@ -157,6 +177,11 @@ export function runSimulation(
     for (let t = 0; t < T; t++) {
       winCounts[t * N + s] = wins[t];
       tiebreak[t] = rnd(); // last-resort tiebreak (coin flip)
+    }
+    for (let ti = 0; ti < trackedIdx.length; ti++) {
+      if (winnerOf[trackedIdx[ti]] === gHome[trackedIdx[ti]]) {
+        trackedGames[ti].homeBits[s >>> 5] |= 1 << (s & 31);
+      }
     }
 
     // NFL-style tiebreak comparator (pairwise approximation of the official
@@ -248,6 +273,7 @@ export function runSimulation(
     wonConference,
     wonSuperbowl,
     seedCounts,
+    trackedGames,
   };
 }
 
