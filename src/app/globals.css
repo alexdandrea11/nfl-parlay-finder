@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens — sharp fintech/sportsbook, dark by design.
+   Chart mark colors are CVD-validated for the dark surface (dataviz checks).
+--------------------------------------------------------------------------- */
+@theme {
+  /* Surfaces */
+  --color-bg: #0a0e15;
+  --color-surface: #10151f;
+  --color-surface-2: #151c29;
+  --color-surface-3: #1b2434;
+  --color-line: #1f2938;
+  --color-line-2: #2b3850;
+
+  /* Ink */
+  --color-ink: #e9eef6;
+  --color-ink-2: #9aa7ba;
+  --color-ink-3: #5d6b80;
+
+  /* Accents (text/badges — brighter than chart fills for legibility) */
+  --color-up: #2ee6a8;
+  --color-up-dim: #17b585;
+  --color-brand: #5b9cff;
+  --color-warn: #f5c542;
+  --color-down: #ff7a7a;
+
+  /* Chart mark fills — validated: #3b82f6 #c17a06 #0d9f6d #ef4444 */
+  --color-chart-blue: #3b82f6;
+  --color-chart-amber: #c17a06;
+  --color-chart-green: #0d9f6d;
+  --color-chart-red: #ef4444;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", monospace;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeric alignment everywhere numbers stack */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(91, 156, 255, 0.28);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Focus visibility on inputs/buttons */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
+/* Range inputs — consistent dark track */
+input[type="range"] {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--color-line);
+  appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: currentColor;
+  border: 2px solid var(--color-bg);
+  cursor: pointer;
+}
+
+/* Subtle glow for positive-EV emphasis */
+.glow-up {
+  text-shadow: 0 0 18px rgba(46, 230, 168, 0.35);
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.card-hover:hover {
+  border-color: var(--color-line-2);
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-2) 25%,
+    var(--color-surface-3) 50%,
+    var(--color-surface-2) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: pulse-dot 2s infinite;
+}
