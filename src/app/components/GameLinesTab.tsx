@@ -23,6 +23,15 @@ interface SgpComponent {
   line?: number;
 }
 
+interface StudioResult {
+  muHome: number;
+  muAway: number;
+  liveProps: boolean;
+  projections: { name: string; pos: string; team: string; projPassYds: number | null; projRushYds: number | null; projRecYds: number | null }[];
+  edges: { player: string; team: string; market: string; line: number; proj: number; overPrice: number; underPrice: number | null; evOver: number; evUnder: number | null }[];
+  suggestions: { name: string; legs: string[]; jointProb: number; fairAmerican: number }[];
+}
+
 interface SgpResult {
   muHome: number;
   muAway: number;
@@ -67,6 +76,31 @@ export function GameLinesTab({
   const [sgpQuote, setSgpQuote] = useState("");
   const [sgp, setSgp] = useState<SgpResult | null>(null);
   const [sgpLoading, setSgpLoading] = useState(false);
+  const [studio, setStudio] = useState<StudioResult | null>(null);
+  const [studioLoading, setStudioLoading] = useState(false);
+
+  async function runStudio(g: GameRow) {
+    setStudioLoading(true);
+    setStudio(null);
+    try {
+      const res = await fetch("/api/sgpstudio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          homeId: g.homeId,
+          awayId: g.awayId,
+          eventId: g.eventId,
+          adjustments,
+          decidedGames,
+          qbOverrides,
+        }),
+      });
+      const d = await res.json();
+      if (!d.error) setStudio(d);
+    } finally {
+      setStudioLoading(false);
+    }
+  }
 
   function togglePick(c: SgpComponent) {
     setSgp(null);
@@ -246,6 +280,13 @@ export function GameLinesTab({
                       >
                         {sgpLoading ? "…" : "Price it"}
                       </button>
+                      <button
+                        onClick={() => runStudio(g)}
+                        disabled={studioLoading}
+                        className="rounded-lg border border-warn/50 px-3 py-1 text-[11px] font-bold text-warn disabled:opacity-40"
+                      >
+                        {studioLoading ? "Projecting…" : "✨ Studio"}
+                      </button>
                       {sgp && (
                         <span className="tnum font-mono text-[11px] text-ink-2">
                           model score {sgp.muHome.toFixed(0)}–{sgp.muAway.toFixed(0)} · joint{" "}
@@ -260,6 +301,50 @@ export function GameLinesTab({
                         </span>
                       )}
                     </div>
+                    {studio && sgpFor === g.eventId && (
+                      <div className="mt-3 space-y-2 border-t border-line pt-3 font-sans">
+                        <p className="tnum font-mono text-[11px] text-ink-2">
+                          Model score {studio.muHome.toFixed(0)}–{studio.muAway.toFixed(0)}
+                          {!studio.liveProps && " · FD prop lines not posted yet — projections only"}
+                        </p>
+                        {studio.suggestions.length > 0 && (
+                          <div className="space-y-1">
+                            {studio.suggestions.map((s) => (
+                              <div key={s.name} className="tnum flex flex-wrap items-center justify-between gap-2 rounded-lg bg-bg px-3 py-1.5 font-mono text-[11px]">
+                                <span className="font-sans text-ink">
+                                  <b className="text-warn">{s.name}:</b> {s.legs.join(" + ")}
+                                </span>
+                                <span className="text-ink-3">
+                                  {(s.jointProb * 100).toFixed(1)}% · fair {s.fairAmerican > 0 ? "+" : ""}{s.fairAmerican}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {studio.edges.length > 0 && (
+                          <div className="space-y-0.5">
+                            {studio.edges.slice(0, 8).map((e, i) => (
+                              <div key={i} className="tnum flex items-center justify-between rounded bg-bg px-3 py-1 font-mono text-[11px]">
+                                <span className="font-sans">{e.player} {e.market} {e.line} (proj {e.proj.toFixed(0)})</span>
+                                <span className={e.evOver > 0.03 ? "font-bold text-up" : (e.evUnder ?? -1) > 0.03 ? "font-bold text-down" : "text-ink-3"}>
+                                  {e.evOver > (e.evUnder ?? -9)
+                                    ? `OVER ${e.overPrice > 0 ? "+" : ""}${e.overPrice} EV ${(e.evOver * 100).toFixed(0)}%`
+                                    : `UNDER EV ${((e.evUnder ?? 0) * 100).toFixed(0)}%`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 md:grid-cols-3">
+                          {studio.projections.slice(0, 12).map((p) => (
+                            <span key={p.name} className="tnum font-mono text-[10px] text-ink-3">
+                              {p.team} {p.name.split(" ").slice(-1)[0]} {p.pos}:{" "}
+                              {p.projPassYds ? `${p.projPassYds} pass` : p.projRecYds ? `${p.projRecYds} rec` : `${p.projRushYds} rush`}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </td>
                 </tr>
               )}

@@ -33,6 +33,8 @@ export function GauntletTab({
 }) {
   const [data, setData] = useState<{ weeks: number[]; rows: Row[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conf, setConf] = useState<"ALL" | "AFC" | "NFC">("ALL");
+  const [division, setDivision] = useState<string>("ALL");
 
   useEffect(() => {
     fetch("/api/gauntlet", {
@@ -51,7 +53,30 @@ export function GauntletTab({
   return (
     <div className="space-y-3">
       <Card className="overflow-x-auto p-5">
-        <SectionTitle>The gauntlet — every game, the model's win probability</SectionTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SectionTitle>The gauntlet — every game, the model's win probability</SectionTitle>
+          <div className="flex gap-1">
+            {(["ALL", "AFC", "NFC"] as const).map((c) => (
+              <button
+                key={c}
+                onClick={() => { setConf(c); setDivision("ALL"); }}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${conf === c ? "border-brand/60 bg-brand/10 text-brand" : "border-line text-ink-3"}`}
+              >
+                {c}
+              </button>
+            ))}
+            {conf !== "ALL" &&
+              ["ALL", "East", "North", "South", "West"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDivision(d)}
+                  className={`rounded-lg border px-2 py-1 text-[10px] font-semibold ${division === d ? "border-up-dim/60 bg-up/10 text-up" : "border-line text-ink-3"}`}
+                >
+                  {d}
+                </button>
+              ))}
+          </div>
+        </div>
         <table className="tnum mt-3 border-separate border-spacing-px font-mono text-[10px]">
           <thead>
             <tr className="text-[9px] font-bold uppercase text-ink-3">
@@ -63,9 +88,11 @@ export function GauntletTab({
             </tr>
           </thead>
           <tbody>
-            {data.rows.map((r) => (
+            {data.rows
+              .filter((r) => (conf === "ALL" || r.conference === conf) && (division === "ALL" || r.division === division))
+              .map((r) => (
               <tr key={r.id}>
-                <td className="whitespace-nowrap pr-2 font-sans text-xs font-semibold text-ink">{r.id}</td>
+                <td className="sticky left-0 z-10 whitespace-nowrap bg-surface pr-2 font-sans text-xs font-semibold text-ink" title={`${r.name} · ${r.conference} ${r.division}`}>{r.id}</td>
                 <td className="pr-2 text-right text-ink-2">{r.projWins.toFixed(1)}</td>
                 {r.cells.map((c, i) =>
                   c == null ? (
@@ -88,7 +115,10 @@ export function GauntletTab({
                       }}
                       title={`Wk ${c.week}: ${c.home ? "vs" : "@"} ${c.opp} — ${fmtPct(c.pWin, 0)} to win${c.result ? ` · final: ${c.result}` : ""}`}
                     >
-                      {c.result ?? `${c.home ? "" : "@"}${c.opp}`}
+                      <div className="leading-3">
+                        <div>{c.result ?? `${c.home ? "" : "@"}${c.opp}`}</div>
+                        {!c.result && <div className="text-[8px] opacity-80">{Math.round(c.pWin * 100)}%</div>}
+                      </div>
                     </td>
                   ),
                 )}

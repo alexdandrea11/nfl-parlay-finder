@@ -276,6 +276,85 @@ function buildQbTable(perSeasonQb) {
   return { list, starters, replacement, qbMean };
 }
 
+// --- Player usage layer (for prop projections / SGP studio) -------------------
+// Per-player per-game rates + team per-game volume, so runtime can compute
+// usage SHARES and back player lines out of the game model's team totals.
+const PLAYER_SEASONS = [2024, 2025];
+const PLAYER_WEIGHTS = { 2024: 0.35, 2025: 0.65 };
+
+async function seasonPlayerRates(season) {
+  const rows = await fetchCsv(
+    `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_reg_${season}.csv`,
+  );
+  const out = {};
+  for (const r of rows) {
+    if (!["QB", "RB", "WR", "TE"].includes(r.position)) continue;
+    const team = mapCode(r.recent_team);
+    if (!DIVISIONS[team]) continue;
+    const g = Number(r.games) || 0;
+    if (g < 3) continue;
+    out[r.player_id] = {
+      name: r.player_display_name,
+      pos: r.position,
+      team,
+      g,
+      passAtt: (Number(r.attempts) || 0) / g,
+      passYds: (Number(r.passing_yards) || 0) / g,
+      passTds: (Number(r.passing_tds) || 0) / g,
+      carries: (Number(r.carries) || 0) / g,
+      rushYds: (Number(r.rushing_yards) || 0) / g,
+      targets: (Number(r.targets) || 0) / g,
+      rec: (Number(r.receptions) || 0) / g,
+      recYds: (Number(r.receiving_yards) || 0) / g,
+      recTds: (Number(r.receiving_tds) || 0) / g,
+    };
+  }
+  return out;
+}
+
+function buildPlayerTable(perSeason) {
+  const ids = new Set();
+  for (const s of PLAYER_SEASONS) for (const id of Object.keys(perSeason[s] ?? {})) ids.add(id);
+  const KEYS = ["passAtt", "passYds", "passTds", "carries", "rushYds", "targets", "rec", "recYds", "recTds"];
+  const byTeam = {};
+  for (const id of ids) {
+    const latest = perSeason[2025]?.[id] ?? perSeason[2024]?.[id];
+    if (!latest) continue;
+    const blended = { id, name: latest.name, pos: latest.pos, team: latest.team, g: 0 };
+    let wSum = 0;
+    for (const s of PLAYER_SEASONS) {
+      const r = perSeason[s]?.[id];
+      if (!r) continue;
+      const w = PLAYER_WEIGHTS[s] * Math.min(1, r.g / 8);
+      wSum += w;
+      blended.g += r.g;
+      for (const k of KEYS) blended[k] = (blended[k] ?? 0) + w * r[k];
+    }
+    if (!wSum) continue;
+    for (const k of KEYS) blended[k] = Math.round(((blended[k] ?? 0) / wSum) * 100) / 100;
+    (byTeam[latest.team] ??= []).push(blended);
+  }
+  // Keep the ~12 most-used players per team (by touches+targets).
+  for (const t of Object.keys(byTeam)) {
+    byTeam[t].sort(
+      (a, b) => b.passAtt + b.carries + b.targets - (a.passAtt + a.carries + a.targets),
+    );
+    byTeam[t] = byTeam[t].slice(0, 12);
+  }
+  // Team per-game volume baselines from 2025 player sums.
+  const teamPerGame = {};
+  for (const t of Object.keys(byTeam)) {
+    const p25 = Object.values(perSeason[2025] ?? {}).filter((r) => r.team === t);
+    teamPerGame[t] = {
+      passAtt: Math.round(p25.reduce((a, r) => a + r.passAtt, 0) * 10) / 10,
+      passYds: Math.round(p25.reduce((a, r) => a + r.passYds, 0) * 10) / 10,
+      carries: Math.round(p25.reduce((a, r) => a + r.carries, 0) * 10) / 10,
+      rushYds: Math.round(p25.reduce((a, r) => a + r.rushYds, 0) * 10) / 10,
+    };
+  }
+  return { byTeam, teamPerGame };
+}
+
 // --- schedule + head-to-head -------------------------------------------------
 async function loadGames() {
   return fetchCsv("https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv");
@@ -362,6 +441,10 @@ const perSeasonQb = {};
 for (const s of SEASONS) perSeasonQb[s] = await seasonQbRates(s);
 const qbs = buildQbTable(perSeasonQb);
 
+const perSeasonPlayers = {};
+for (const s of PLAYER_SEASONS) perSeasonPlayers[s] = await seasonPlayerRates(s);
+const players = buildPlayerTable(perSeasonPlayers);
+
 const experts = await fetchFpi();
 
 const games = await loadGames();
@@ -381,6 +464,7 @@ const model = {
   units: blended,
   perSeason,
   qbs,
+  players,
   experts,
   schedule,
   h2h,
