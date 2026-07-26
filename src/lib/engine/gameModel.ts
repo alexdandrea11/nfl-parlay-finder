@@ -182,6 +182,19 @@ export function buildWinProbMatrices(
 }
 
 export const GAME_MARGIN_SD = MARGIN_SD;
+export const HFA_POINTS = HFA_PTS;
+
+/** Expected points scored by offense `off` against defense `def` (approx). */
+export function expectedPoints(
+  offId: string,
+  defId: string,
+  unitsOverride?: Record<string, UnitProfile> | null,
+): number {
+  const off = unitsOverride?.[offId] ?? unitsFor(offId);
+  const def = unitsOverride?.[defId] ?? unitsFor(defId);
+  const baseline = PASS_PLAYS * LEAGUE.passOff + RUSH_PLAYS * LEAGUE.rushOff;
+  return 22.6 + (offenseEpaVs(off, def) - baseline);
+}
 
 /** P(actual home margin exceeds x) under the model's margin distribution. */
 export function probMarginOver(expectedMargin: number, x: number): number {

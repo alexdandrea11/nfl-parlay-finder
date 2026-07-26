@@ -110,6 +110,46 @@ export async function GET(req: Request) {
   const graded = await gradeBets(bets);
   const clvChanged = await refreshClv(bets, board).catch(() => false);
 
+  // 4. Digest: one readable summary of everything the machine did, stored
+  // for the UI and optionally pushed to the phone via ntfy.sh (set NTFY_TOPIC).
+  {
+    const mh = await readDoc<{ ts: number; teams: Record<string, { po: number; sb: number }> }[]>(
+      "model-history",
+      [],
+    );
+    const movers: string[] = [];
+    if (mh.length >= 2) {
+      const prev = mh[mh.length - 2].teams;
+      const cur = mh[mh.length - 1].teams;
+      Object.keys(cur)
+        .map((id) => ({ id, d: (cur[id]?.po ?? 0) - (prev[id]?.po ?? 0) }))
+        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+        .slice(0, 3)
+        .filter((m) => Math.abs(m.d) > 0.005)
+        .forEach((m) => movers.push(`${m.id} playoffs ${m.d > 0 ? "+" : ""}${(m.d * 100).toFixed(1)}pp`));
+    }
+    const open = bets.filter((b) => b.status === "open").length;
+    const won = bets.filter((b) => b.status === "won").length;
+    const lost = bets.filter((b) => b.status === "lost").length;
+    const triggered = items.filter((i) => i.triggered);
+    const lines = [
+      movers.length ? `Movers: ${movers.join(", ")}` : "No big model moves.",
+      `Alerts: ${triggered.length ? triggered.map((t) => `${t.name} (top EV ${Math.round((t.topEv ?? 0) * 100)}%)`).join(", ") : "none triggered"}`,
+      `Bets: ${open} open, ${won}W-${lost}L`,
+      `Prices snapshotted: ${snapshot.count}`,
+    ];
+    const digest = { at: Date.now(), lines };
+    await writeDoc("digest", digest);
+    const topic = process.env.NTFY_TOPIC;
+    if (topic) {
+      await fetch(`https://ntfy.sh/${topic}`, {
+        method: "POST",
+        headers: { Title: "ParlayEdge daily brief" },
+        body: lines.join("\n"),
+      }).catch(() => {});
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     snapshotPrices: snapshot.count,

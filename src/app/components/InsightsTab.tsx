@@ -46,6 +46,14 @@ export function InsightsTab({
   const [error, setError] = useState<string | null>(null);
   const [conf, setConf] = useState<"AFC" | "NFC">("AFC");
   const [metric, setMetric] = useState<"po" | "dv" | "sb" | "w">("po");
+  const [digest, setDigest] = useState<{ at: number; lines: string[] } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/digest")
+      .then((r) => r.json())
+      .then((d) => d?.at && setDigest(d))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/insights", {
@@ -71,6 +79,23 @@ export function InsightsTab({
 
   return (
     <div className="space-y-4">
+      {digest && (
+        <Card className="p-4">
+          <SectionTitle>
+            📰 Daily brief · {new Date(digest.at).toLocaleDateString()}
+          </SectionTitle>
+          <ul className="mt-2 space-y-0.5 text-[13px] text-ink-2">
+            {digest.lines.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-ink-3">
+            Written by the daily cron. To get this on your phone: install the free ntfy app,
+            subscribe to a private topic name, and set NTFY_TOPIC in Vercel env — pushes start the
+            next morning.
+          </p>
+        </Card>
+      )}
       {/* Seeding matrix */}
       <Card className="overflow-x-auto p-5">
         <div className="flex items-center justify-between">

@@ -1,6 +1,7 @@
 import {
   buildWinProbMatrices,
   eloToPts,
+  HFA_POINTS,
   probMarginOver,
   qbPassOffDelta,
   restAdjustment,
@@ -78,18 +79,26 @@ export function runSimulation(
   const gHome = new Int32Array(G);
   const gAway = new Int32Array(G);
   const gProb = new Float64Array(G);
+  const gMargin = new Float64Array(G);
   games.forEach((g, gi) => {
     const h = index[g.home];
     const a = index[g.away];
     gHome[gi] = h;
     gAway[gi] = a;
     // Schedule-spot adjustment: short weeks and byes move the margin.
-    const rest = restAdjustment(g.hRest, g.aRest);
-    gProb[gi] =
-      rest === 0
-        ? pHomeMatrix[h * T + a]
-        : probMarginOver(marginMatrix[h * T + a] + rest, 0);
+    gMargin[gi] = marginMatrix[h * T + a] + restAdjustment(g.hRest, g.aRest);
+    gProb[gi] = probMarginOver(gMargin[gi], 0);
   });
+
+  // Rating uncertainty: preseason ratings are estimates, not facts. Each
+  // simulated season draws a persistent rating error per team (~N(0, 2.5
+  // pts)), which fattens the tails and keeps extreme probabilities honest.
+  const RATING_SD = 2.5;
+  const noise = new Float64Array(T);
+  const gauss = () => {
+    const u = Math.max(1e-12, rnd());
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd());
+  };
 
   // Games already decided (in-season): force the winner. Keyed by the ORDERED
   // (home, away) pair — each NFL pairing hosts at most once per season.
@@ -164,11 +173,15 @@ export function runSimulation(
     wins.fill(0);
     divWins.fill(0);
     confWins.fill(0);
+    for (let t = 0; t < T; t++) noise[t] = gauss() * RATING_SD;
     // Regular season.
     for (let gi = 0; gi < G; gi++) {
       let w: number;
       if (gDecided && gDecided[gi] >= 0) w = gDecided[gi];
-      else w = rnd() < gProb[gi] ? gHome[gi] : gAway[gi];
+      else {
+        const p = probMarginOver(gMargin[gi] + noise[gHome[gi]] - noise[gAway[gi]], 0);
+        w = rnd() < p ? gHome[gi] : gAway[gi];
+      }
       winnerOf[gi] = w;
       wins[w]++;
       if (gIsDiv[gi]) divWins[w]++;
@@ -251,15 +264,16 @@ export function runSimulation(
         seedCounts[st.idx * 7 + seedIdx]++;
       });
 
-      const confChampIdx = simulatePlayoffs(seeds, pHomeMatrix, T, rnd);
+      const confChampIdx = simulatePlayoffs(seeds, marginMatrix, noise, T, rnd);
       wonConference[confChampIdx * N + s] = 1;
       if (conf === "AFC") afcChamp = confChampIdx;
       else nfcChamp = confChampIdx;
     }
 
     // Super Bowl — neutral site.
-    const pAfc = pNeutralMatrix[afcChamp * T + nfcChamp];
-    const sbWinner = rnd() < pAfc ? afcChamp : nfcChamp;
+    const sbMargin =
+      marginMatrix[afcChamp * T + nfcChamp] - HFA_POINTS + noise[afcChamp] - noise[nfcChamp];
+    const sbWinner = rnd() < probMarginOver(sbMargin, 0) ? afcChamp : nfcChamp;
     wonSuperbowl[sbWinner * N + s] = 1;
   }
 
@@ -280,7 +294,8 @@ export function runSimulation(
 /** Reseeded 7-seed bracket. Returns the conference champion's team index. */
 function simulatePlayoffs(
   seeds: Standing[],
-  pHomeMatrix: Float64Array,
+  marginMatrix: Float64Array,
+  noise: Float64Array,
   T: number,
   rnd: () => number,
 ): number {
@@ -291,7 +306,8 @@ function simulatePlayoffs(
     const aHosts = (seedRank.get(aIdx) ?? 99) < (seedRank.get(bIdx) ?? 99);
     const home = aHosts ? aIdx : bIdx;
     const away = aHosts ? bIdx : aIdx;
-    return rnd() < pHomeMatrix[home * T + away] ? home : away;
+    const p = probMarginOver(marginMatrix[home * T + away] + noise[home] - noise[away], 0);
+    return rnd() < p ? home : away;
   };
 
   const idxOf = (rank: number) => seeds[rank - 1].idx;

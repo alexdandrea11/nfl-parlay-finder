@@ -12,6 +12,9 @@ export interface BookLine {
   spreadHome: number | null; // e.g. -4.5 (home favored by 4.5)
   spreadHomePrice: number | null;
   spreadAwayPrice: number | null;
+  totalLine: number | null;
+  overPrice: number | null;
+  underPrice: number | null;
 }
 
 export interface GameOdds {
@@ -44,7 +47,7 @@ async function fetchLines(): Promise<typeof cache> {
   if (!key || (process.env.ODDS_SOURCE ?? "sample") !== "live") return null;
   const url =
     `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/` +
-    `?apiKey=${key}&regions=us&markets=h2h,spreads&oddsFormat=american`;
+    `?apiKey=${key}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     console.error(`Odds API game lines ${res.status}`);
@@ -65,6 +68,9 @@ async function fetchLines(): Promise<typeof cache> {
       const mlAway = h2h?.outcomes.find((o) => o.name === ev.away_team)?.price ?? null;
       const sh = spreads?.outcomes.find((o) => o.name === ev.home_team);
       const sa = spreads?.outcomes.find((o) => o.name === ev.away_team);
+      const totals = bm.markets.find((m) => m.key === "totals");
+      const over = totals?.outcomes.find((o) => o.name === "Over");
+      const under = totals?.outcomes.find((o) => o.name === "Under");
       books.push({
         book: bm.key,
         mlHome,
@@ -72,6 +78,9 @@ async function fetchLines(): Promise<typeof cache> {
         spreadHome: sh?.point ?? null,
         spreadHomePrice: sh?.price ?? null,
         spreadAwayPrice: sa?.price ?? null,
+        totalLine: over?.point ?? null,
+        overPrice: over?.price ?? null,
+        underPrice: under?.price ?? null,
       });
     }
     if (books.length) games.push({ eventId: ev.id, commence: ev.commence_time, homeId, awayId, books });
