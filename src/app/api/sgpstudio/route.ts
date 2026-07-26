@@ -181,6 +181,66 @@ export async function POST(req: Request) {
       }
     }
 
+    // No live prop lines? Suggest parlays purely from the model, at
+    // model-chosen "comfort lines" (~15% under projection → each leg lands
+    // roughly 60-65%). The user checks FanDuel's quote against our fair price.
+    if (suggestions.length === 0) {
+      const dogId = favId === homeId ? awayId : homeId;
+      const r5 = (v: number) => Math.max(5, Math.round((v * 0.85) / 5) * 5);
+      const byTeam = (team: string) => proj.players.filter((p) => p.team === team);
+      const qbOf = (team: string) => byTeam(team).find((p) => p.projPassYds);
+      const wrOf = (team: string) =>
+        byTeam(team).filter((p) => p.projRecYds).sort((a, b) => b.projRecYds! - a.projRecYds!)[0];
+      const rbOf = (team: string) =>
+        byTeam(team).filter((p) => p.projRushYds).sort((a, b) => b.projRushYds! - a.projRushYds!)[0];
+      const over = (team: string, name: string, mu: number, stat: "pass" | "rush" | "rec"): Leg => ({
+        label: `${name} over ${r5(mu)} ${stat} yds`,
+        team,
+        kind: "over",
+        mu,
+        sd: propSd(mu, stat),
+        line: r5(mu),
+      });
+      const favQb = qbOf(favId);
+      const favWr = wrOf(favId);
+      const favRb = rbOf(favId);
+      const dogQb = qbOf(dogId);
+      const combos: { name: string; legs: Leg[] }[] = [];
+      if (favQb?.projPassYds && favWr?.projRecYds) {
+        combos.push({
+          name: "Game script",
+          legs: [
+            { label: `${favId} ML`, team: favId, kind: "ml" },
+            over(favId, favQb.name, favQb.projPassYds, "pass"),
+            over(favId, favWr.name, favWr.projRecYds, "rec"),
+          ],
+        });
+      }
+      if (favRb?.projRushYds) {
+        combos.push({
+          name: "Ground control",
+          legs: [
+            { label: `${favId} ML`, team: favId, kind: "ml" },
+            over(favId, favRb.name, favRb.projRushYds, "rush"),
+          ],
+        });
+      }
+      if (favQb?.projPassYds && dogQb?.projPassYds) {
+        combos.push({
+          name: "Shootout",
+          legs: [
+            over(favId, favQb.name, favQb.projPassYds, "pass"),
+            over(dogId, dogQb.name, dogQb.projPassYds, "pass"),
+          ],
+        });
+      }
+      for (const c of combos) {
+        const p = priceCombo(c.legs);
+        suggestions.push({ name: c.name, legs: c.legs.map((l) => l.label), jointProb: p, fairAmerican: probToAmerican(p) });
+      }
+      suggestions.sort((a, b) => b.jointProb - a.jointProb);
+    }
+
     return NextResponse.json({
       muHome: Math.round(proj.muHome * 10) / 10,
       muAway: Math.round(proj.muAway * 10) / 10,

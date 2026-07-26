@@ -371,11 +371,12 @@ export function GameLinesTab({
                           </div>
                           {!studio.liveProps && (
                             <div className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-[12px] leading-relaxed text-ink-2">
-                              <b className="text-brand">No suggested parlays yet:</b> FanDuel hasn't
-                              posted player prop lines for this game (they appear during game week).
-                              Once they do, this panel shows <b>suggested SGP combos ranked best-first</b>{" "}
-                              and every prop graded against our projection. Below are the raw player
-                              projections those will be built from — individual estimates, not parlays.
+                              <b className="text-brand">Model-built parlays:</b> FanDuel hasn't posted
+                              player prop lines for this game yet, so the suggestions below use{" "}
+                              <b>our model's own lines</b> (set ~15% under projection). Build the same
+                              legs on FanDuel, then compare their quoted odds to our fair price — quote
+                              better than fair = value. Once FD posts real prop lines (game week), this
+                              panel grades every prop and ranks combos by edge automatically.
                             </div>
                           )}
                           {studio.suggestions.length > 0 && (
