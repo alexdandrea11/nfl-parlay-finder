@@ -266,114 +266,173 @@ export function GameLinesTab({
               {sgpFor === g.eventId && (
                 <tr key={`${g.eventId}-sgp`}>
                   <td colSpan={10} className="bg-surface-2 px-3.5 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5 font-sans">
-                      {([
-                        { label: `${g.homeId} ML`, c: { type: "ml", side: "home" } as SgpComponent },
-                        { label: `${g.awayId} ML`, c: { type: "ml", side: "away" } as SgpComponent },
-                        ...(g.fd?.spreadHome != null
-                          ? [
+                    <div className="space-y-3 font-sans">
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">
+                          Build a same-game parlay · pick up to one per market
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                          {([
+                            { grp: "Winner", opts: [
+                              { label: g.homeId, c: { type: "ml", side: "home" } as SgpComponent },
+                              { label: g.awayId, c: { type: "ml", side: "away" } as SgpComponent },
+                            ]},
+                            { grp: "Spread", opts: g.fd?.spreadHome != null ? [
                               { label: `${g.homeId} ${g.fd.spreadHome > 0 ? "+" : ""}${g.fd.spreadHome}`, c: { type: "spread", side: "home", line: g.fd.spreadHome } as SgpComponent },
                               { label: `${g.awayId} ${-g.fd.spreadHome > 0 ? "+" : ""}${-g.fd.spreadHome}`, c: { type: "spread", side: "away", line: g.fd.spreadHome } as SgpComponent },
-                            ]
-                          : []),
-                        ...(g.fd?.totalLine != null
-                          ? [
+                            ] : []},
+                            { grp: "Total", opts: g.fd?.totalLine != null ? [
                               { label: `Over ${g.fd.totalLine}`, c: { type: "total", side: "over", line: g.fd.totalLine } as SgpComponent },
                               { label: `Under ${g.fd.totalLine}`, c: { type: "total", side: "under", line: g.fd.totalLine } as SgpComponent },
-                            ]
-                          : []),
-                      ]).map((opt) => {
-                        const active = picks.some((p) => p.type === opt.c.type && p.side === opt.c.side);
-                        return (
-                          <button
-                            key={opt.label}
-                            onClick={() => togglePick(opt.c)}
-                            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                              active ? "border-warn/70 bg-warn/15 text-warn" : "border-line text-ink-2 hover:border-line-2"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                      <input
-                        value={sgpQuote}
-                        onChange={(e) => setSgpQuote(e.target.value)}
-                        placeholder="FD SGP quote"
-                        className="tnum w-24 rounded-lg border border-line bg-bg px-2 py-1 font-mono text-[11px] text-ink"
-                      />
-                      <button
-                        onClick={() => priceSgp(g)}
-                        disabled={picks.length === 0 || sgpLoading}
-                        className="rounded-lg bg-warn/90 px-3 py-1 text-[11px] font-bold text-[#2a1f03] disabled:opacity-40"
-                      >
-                        {sgpLoading ? "…" : "Price it"}
-                      </button>
-                      <button
-                        onClick={() => runStudio(g)}
-                        disabled={studioLoading}
-                        className="rounded-lg border border-warn/50 px-3 py-1 text-[11px] font-bold text-warn disabled:opacity-40"
-                      >
-                        {studioLoading ? "Projecting…" : "✨ Studio"}
-                      </button>
-                      {sgp && (
-                        <span className="tnum font-mono text-[11px] text-ink-2">
-                          model score {sgp.muHome.toFixed(0)}–{sgp.muAway.toFixed(0)} · joint{" "}
-                          <b className="text-ink">{fmtPct(sgp.jointProb, 1)}</b> · fair{" "}
-                          <b className="text-ink">{sgp.fairAmerican > 0 ? "+" : ""}{sgp.fairAmerican}</b> · corr{" "}
-                          {sgp.correlation.toFixed(2)}×
-                          {sgp.evAtQuote != null && (
-                            <b className={sgp.evAtQuote >= 0 ? "text-up" : "text-down"}>
-                              {" "}· EV {sgp.evAtQuote >= 0 ? "+" : ""}{fmtPct(sgp.evAtQuote, 1)} {sgp.evAtQuote >= 0 ? "BET" : "PASS"}
-                            </b>
+                            ] : []},
+                          ]).map((grp) =>
+                            grp.opts.length === 0 ? null : (
+                              <span key={grp.grp} className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-ink-3">{grp.grp}</span>
+                                {grp.opts.map((opt) => {
+                                  const active = picks.some((p) => p.type === opt.c.type && p.side === opt.c.side);
+                                  return (
+                                    <button
+                                      key={opt.label}
+                                      onClick={() => togglePick(opt.c)}
+                                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                        active ? "border-warn/70 bg-warn/15 text-warn" : "border-line text-ink-2 hover:border-line-2"
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            ),
                           )}
-                        </span>
-                      )}
-                    </div>
-                    {studio && sgpFor === g.eventId && (
-                      <div className="mt-3 space-y-2 border-t border-line pt-3 font-sans">
-                        <p className="tnum font-mono text-[11px] text-ink-2">
-                          Model score {studio.muHome.toFixed(0)}–{studio.muAway.toFixed(0)}
-                          {!studio.liveProps && " · FD prop lines not posted yet — projections only"}
-                        </p>
-                        {studio.suggestions.length > 0 && (
-                          <div className="space-y-1">
-                            {studio.suggestions.map((s) => (
-                              <div key={s.name} className="tnum flex flex-wrap items-center justify-between gap-2 rounded-lg bg-bg px-3 py-1.5 font-mono text-[11px]">
-                                <span className="font-sans text-ink">
-                                  <b className="text-warn">{s.name}:</b> {s.legs.join(" + ")}
-                                </span>
-                                <span className="text-ink-3">
-                                  {(s.jointProb * 100).toFixed(1)}% · fair {s.fairAmerican > 0 ? "+" : ""}{s.fairAmerican}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {studio.edges.length > 0 && (
-                          <div className="space-y-0.5">
-                            {studio.edges.slice(0, 8).map((e, i) => (
-                              <div key={i} className="tnum flex items-center justify-between rounded bg-bg px-3 py-1 font-mono text-[11px]">
-                                <span className="font-sans">{e.player} {e.market} {e.line} (proj {e.proj.toFixed(0)})</span>
-                                <span className={e.evOver > 0.03 ? "font-bold text-up" : (e.evUnder ?? -1) > 0.03 ? "font-bold text-down" : "text-ink-3"}>
-                                  {e.evOver > (e.evUnder ?? -9)
-                                    ? `OVER ${e.overPrice > 0 ? "+" : ""}${e.overPrice} EV ${(e.evOver * 100).toFixed(0)}%`
-                                    : `UNDER EV ${((e.evUnder ?? 0) * 100).toFixed(0)}%`}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 md:grid-cols-3">
-                          {studio.projections.slice(0, 12).map((p) => (
-                            <span key={p.name} className="tnum font-mono text-[10px] text-ink-3">
-                              {p.team} {p.name.split(" ").slice(-1)[0]} {p.pos}:{" "}
-                              {p.projPassYds ? `${p.projPassYds} pass` : p.projRecYds ? `${p.projRecYds} rec` : `${p.projRushYds} rush`}
-                            </span>
-                          ))}
                         </div>
                       </div>
-                    )}
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => priceSgp(g)}
+                          disabled={picks.length === 0 || sgpLoading}
+                          className="rounded-lg bg-warn/90 px-3.5 py-1.5 text-[11px] font-bold text-[#2a1f03] disabled:opacity-40"
+                        >
+                          {sgpLoading ? "Pricing…" : "Price my picks"}
+                        </button>
+                        <span className="flex items-center gap-1.5 rounded-lg border border-line px-2 py-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-ink-3">FD quotes</span>
+                          <input
+                            value={sgpQuote}
+                            onChange={(e) => setSgpQuote(e.target.value)}
+                            placeholder="+400"
+                            className="tnum w-16 bg-transparent font-mono text-[11px] text-ink outline-none placeholder:text-ink-3/50"
+                          />
+                        </span>
+                        <button
+                          onClick={() => runStudio(g)}
+                          disabled={studioLoading}
+                          className="rounded-lg border border-warn/50 px-3.5 py-1.5 text-[11px] font-bold text-warn disabled:opacity-40"
+                        >
+                          {studioLoading ? "Projecting…" : "✨ Studio: project players & suggest combos"}
+                        </button>
+                      </div>
+
+                      {sgp && (
+                        <div className="flex flex-wrap items-center gap-x-7 gap-y-2 rounded-lg border border-line bg-bg px-4 py-2.5">
+                          {([
+                            ["Model score", `${g.homeId} ${sgp.muHome.toFixed(0)} — ${sgp.muAway.toFixed(0)} ${g.awayId}`],
+                            ["Chance all hit", fmtPct(sgp.jointProb, 1)],
+                            ["Fair price", `${sgp.fairAmerican > 0 ? "+" : ""}${sgp.fairAmerican}`],
+                            ["Correlation", `${sgp.correlation.toFixed(2)}×`],
+                          ] as const).map(([label, value]) => (
+                            <span key={label}>
+                              <span className="block text-[9px] font-bold uppercase tracking-wider text-ink-3">{label}</span>
+                              <span className="tnum font-mono text-sm font-bold text-ink">{value}</span>
+                            </span>
+                          ))}
+                          {sgp.evAtQuote != null && (
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-extrabold ${
+                                sgp.evAtQuote >= 0 ? "bg-up/15 text-up" : "bg-down/15 text-down"
+                              }`}
+                            >
+                              {sgp.evAtQuote >= 0 ? "BET" : "PASS"} · EV {(sgp.evAtQuote * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {studio && sgpFor === g.eventId && (
+                        <div className="space-y-3 border-t border-line pt-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="tnum rounded-lg bg-bg px-3 py-1.5 font-mono text-sm font-bold text-ink">
+                              {g.homeId} {studio.muHome.toFixed(0)} — {studio.muAway.toFixed(0)} {g.awayId}
+                            </span>
+                            <span className="text-[11px] text-ink-3">
+                              model expected score{!studio.liveProps && " · FanDuel prop lines not posted yet — projections only"}
+                            </span>
+                          </div>
+                          {studio.suggestions.length > 0 && (
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">Suggested combos</p>
+                              <div className="grid gap-1.5 md:grid-cols-3">
+                                {studio.suggestions.map((s) => (
+                                  <div key={s.name} className="rounded-lg border border-warn/25 bg-bg p-2.5">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-warn">{s.name}</p>
+                                    <p className="mt-1 text-xs leading-relaxed text-ink">{s.legs.join(" + ")}</p>
+                                    <p className="tnum mt-1 font-mono text-[11px] text-ink-2">
+                                      {(s.jointProb * 100).toFixed(1)}% to hit · fair {s.fairAmerican > 0 ? "+" : ""}{s.fairAmerican}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {studio.edges.length > 0 && (
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">Prop edges vs FanDuel lines</p>
+                              <table className="tnum w-full max-w-2xl font-mono text-[11px]">
+                                <thead>
+                                  <tr className="text-left text-[9px] uppercase text-ink-3">
+                                    <th className="py-1 font-sans">Player</th>
+                                    <th className="font-sans">Market</th>
+                                    <th className="text-right font-sans">FD line</th>
+                                    <th className="text-right font-sans">Our proj</th>
+                                    <th className="text-right font-sans">Play</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {studio.edges.slice(0, 8).map((e, i) => {
+                                    const over = e.evOver > (e.evUnder ?? -9);
+                                    const ev = over ? e.evOver : e.evUnder ?? 0;
+                                    return (
+                                      <tr key={i} className="border-t border-line/60">
+                                        <td className="py-1 font-sans text-xs text-ink">{e.player}</td>
+                                        <td className="font-sans text-xs text-ink-3">{e.market} yds</td>
+                                        <td className="text-right">{e.line}</td>
+                                        <td className={`text-right ${e.proj > e.line ? "text-up" : "text-down"}`}>{e.proj.toFixed(0)}</td>
+                                        <td className={`text-right font-bold ${ev > 0.03 ? (over ? "text-up" : "text-down") : "text-ink-3"}`}>
+                                          {over ? "OVER" : "UNDER"} {(ev * 100).toFixed(0)}%
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          <div>
+                            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">Model projections</p>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 md:grid-cols-4">
+                              {studio.projections.slice(0, 16).map((p) => (
+                                <span key={p.name} className="tnum font-mono text-[10px] text-ink-2">
+                                  <span className="text-ink-3">{p.team}</span> {p.name.split(" ").slice(-1)[0]}:{" "}
+                                  {p.projPassYds ? `${p.projPassYds} pass` : p.projRecYds ? `${p.projRecYds} rec` : `${p.projRushYds} rush`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
