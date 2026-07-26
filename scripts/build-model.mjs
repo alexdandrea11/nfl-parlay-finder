@@ -228,7 +228,7 @@ async function seasonQbRates(season) {
   return out;
 }
 
-function buildQbTable(perSeasonQb) {
+function buildQbTable(perSeasonQb, rosterMap) {
   const ids = new Set();
   for (const s of SEASONS) for (const id of Object.keys(perSeasonQb[s] ?? {})) ids.add(id);
 
@@ -249,7 +249,12 @@ function buildQbTable(perSeasonQb) {
     raw[id] = { id, name, team, ratePerDb: dbW > 0 ? epaW / dbW : 0, totalDb, dbRecent: db2025 };
   }
 
-  const all = Object.values(raw);
+  // Reassign to current rosters; drop QBs no longer in the league.
+  let all = Object.values(raw);
+  if (rosterMap) {
+    all = all.filter((q) => rosterMap[q.id]);
+    for (const q of all) q.team = rosterMap[q.id];
+  }
   // League QB mean weighted by volume.
   const totDb = all.reduce((a, q) => a + q.totalDb, 0);
   const qbMean = all.reduce((a, q) => a + q.ratePerDb * q.totalDb, 0) / (totDb || 1);
@@ -274,6 +279,28 @@ function buildQbTable(perSeasonQb) {
     .map((q) => ({ id: q.id, name: q.name, team: q.team, rating: q.rating, dropbacks: q.totalDb }))
     .sort((a, b) => b.rating - a.rating);
   return { list, starters, replacement, qbMean };
+}
+
+// --- Current-season rosters ----------------------------------------------------
+// Historical stats tell us how good a player is; the CURRENT roster file
+// tells us where he plays now (and whether he's still in the league).
+// Anyone not on a TARGET_SEASON roster is dropped; movers are reassigned.
+async function fetchRosterMap(season) {
+  try {
+    const rows = await fetchCsv(
+      `https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_${season}.csv`,
+    );
+    const map = {};
+    for (const r of rows) {
+      const team = mapCode(r.team);
+      if (r.gsis_id && DIVISIONS[team]) map[r.gsis_id] = team;
+    }
+    console.log(`  roster ${season}: ${Object.keys(map).length} players mapped`);
+    return map;
+  } catch (e) {
+    console.warn(`  ! roster ${season} unavailable (${e.message}) — keeping stats-based teams`);
+    return null;
+  }
 }
 
 // --- Player usage layer (for prop projections / SGP studio) -------------------
@@ -312,7 +339,7 @@ async function seasonPlayerRates(season) {
   return out;
 }
 
-function buildPlayerTable(perSeason) {
+function buildPlayerTable(perSeason, rosterMap) {
   const ids = new Set();
   for (const s of PLAYER_SEASONS) for (const id of Object.keys(perSeason[s] ?? {})) ids.add(id);
   const KEYS = ["passAtt", "passYds", "passTds", "carries", "rushYds", "targets", "rec", "recYds", "recTds"];
@@ -320,7 +347,13 @@ function buildPlayerTable(perSeason) {
   for (const id of ids) {
     const latest = perSeason[2025]?.[id] ?? perSeason[2024]?.[id];
     if (!latest) continue;
-    const blended = { id, name: latest.name, pos: latest.pos, team: latest.team, g: 0 };
+    // Current-roster truth: reassign movers, drop the departed/retired.
+    let team = latest.team;
+    if (rosterMap) {
+      if (!rosterMap[id]) continue;
+      team = rosterMap[id];
+    }
+    const blended = { id, name: latest.name, pos: latest.pos, team, g: 0 };
     let wSum = 0;
     for (const s of PLAYER_SEASONS) {
       const r = perSeason[s]?.[id];
@@ -332,7 +365,7 @@ function buildPlayerTable(perSeason) {
     }
     if (!wSum) continue;
     for (const k of KEYS) blended[k] = Math.round(((blended[k] ?? 0) / wSum) * 100) / 100;
-    (byTeam[latest.team] ??= []).push(blended);
+    (byTeam[team] ??= []).push(blended);
   }
   // Keep the ~12 most-used players per team (by touches+targets).
   for (const t of Object.keys(byTeam)) {
@@ -439,11 +472,12 @@ const { blended, leagueMean } = blendAndShrink(perSeason);
 
 const perSeasonQb = {};
 for (const s of SEASONS) perSeasonQb[s] = await seasonQbRates(s);
-const qbs = buildQbTable(perSeasonQb);
+const rosterMap = await fetchRosterMap(TARGET_SEASON);
+const qbs = buildQbTable(perSeasonQb, rosterMap);
 
 const perSeasonPlayers = {};
 for (const s of PLAYER_SEASONS) perSeasonPlayers[s] = await seasonPlayerRates(s);
-const players = buildPlayerTable(perSeasonPlayers);
+const players = buildPlayerTable(perSeasonPlayers, rosterMap);
 
 const experts = await fetchFpi();
 
