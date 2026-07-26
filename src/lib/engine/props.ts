@@ -11,6 +11,7 @@ export interface PlayerRates {
   pos: string;
   team: string;
   g: number;
+  depth: number | null;
   passAtt: number;
   passYds: number;
   passTds: number;
@@ -62,8 +63,14 @@ export function projectGame(
     const rushDefF = Math.min(1.22, Math.max(0.78, 1 + 2.2 * (opp.rushDef - lg.rushDef)));
     const teamPass = teamPg.passYds * scoreF * passDefF;
     const teamRush = teamPg.rushYds * scoreF * rushDefF;
-    // Only the primary passer gets a pass-yardage projection (backups pollute).
-    const qb1 = roster.reduce((a, b) => (b.passAtt > (a?.passAtt ?? 0) ? b : a), roster[0]);
+    // QB1 = the depth chart's #1 QB when known; else the volume leader.
+    const qbs = roster.filter((p) => p.pos === "QB");
+    const qb1 =
+      qbs.find((p) => p.depth === 1) ??
+      qbs.reduce((a, b) => (b.passAtt > (a?.passAtt ?? 0) ? b : a), qbs[0]);
+    // Depth-chart damping: buried players lose usage vs their historical rates.
+    const depthF = (p: PlayerRates) =>
+      p.depth == null ? 0.85 : p.depth === 1 ? 1.0 : p.depth === 2 ? 0.85 : p.depth === 3 ? 0.55 : 0.3;
     return roster.map((p) => ({
       id: p.id,
       name: p.name,
@@ -73,9 +80,11 @@ export function projectGame(
         p.id === qb1?.id && p.passYds > 30
           ? Math.round((teamPass * Math.min(1, p.passYds / Math.max(1, teamPg.passYds) + 0.12)))
           : null,
-      projRushYds: p.rushYds > 8 ? Math.round((p.rushYds / teamPg.rushYds) * teamRush * 10) / 10 : null,
-      projRecYds: p.recYds > 8 ? Math.round((p.recYds / teamPg.passYds) * teamPass * 10) / 10 : null,
-      projRec: p.rec > 1 ? Math.round(p.rec * scoreF * passDefF * 10) / 10 : null,
+      projRushYds:
+        p.rushYds > 8 ? Math.round((p.rushYds / teamPg.rushYds) * teamRush * depthF(p) * 10) / 10 : null,
+      projRecYds:
+        p.recYds > 8 ? Math.round((p.recYds / teamPg.passYds) * teamPass * depthF(p) * 10) / 10 : null,
+      projRec: p.rec > 1 ? Math.round(p.rec * scoreF * passDefF * depthF(p) * 10) / 10 : null,
     }));
   };
 

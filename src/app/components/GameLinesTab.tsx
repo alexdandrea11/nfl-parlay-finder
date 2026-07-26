@@ -45,6 +45,7 @@ interface SgpResult {
 interface GameRow {
   eventId: string;
   commence: string;
+  week: number | null;
   homeId: string;
   awayId: string;
   modelPHome: number;
@@ -71,6 +72,7 @@ export function GameLinesTab({
   const [games, setGames] = useState<GameRow[] | null>(null);
   const [live, setLive] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [week, setWeek] = useState<number | null>(null);
   const [sgpFor, setSgpFor] = useState<string | null>(null);
   const [picks, setPicks] = useState<SgpComponent[]>([]);
   const [sgpQuote, setSgpQuote] = useState("");
@@ -167,12 +169,39 @@ export function GameLinesTab({
     );
   }
 
+  const weeks = [...new Set(games.map((g) => g.week).filter((w): w is number => w != null))].sort(
+    (a, b) => a - b,
+  );
+  const activeWeek = week ?? weeks[0] ?? null;
+  const shown = activeWeek == null ? games : games.filter((g) => g.week === activeWeek);
+
   const evCls = (ev: number | null) =>
     ev == null ? "text-ink-3" : ev > 0.03 ? "font-bold text-up" : ev > 0 ? "text-up/80" : "text-ink-3";
   const fmtEv = (ev: number | null) => (ev == null ? "—" : `${ev > 0 ? "+" : ""}${fmtPct(ev, 1)}`);
 
   return (
     <div className="space-y-3">
+      {weeks.length > 1 && (
+        <Card className="flex flex-wrap items-center gap-1 p-3">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-ink-3">Week</span>
+          {weeks.map((w) => (
+            <button
+              key={w}
+              onClick={() => setWeek(w)}
+              className={`tnum rounded-md border px-2 py-1 font-mono text-xs font-bold transition-colors ${
+                activeWeek === w
+                  ? "border-brand/60 bg-brand/10 text-brand"
+                  : "border-line text-ink-3 hover:border-line-2"
+              }`}
+            >
+              {w}
+            </button>
+          ))}
+          <span className="tnum ml-2 font-mono text-[11px] text-ink-3">
+            {shown.length} games
+          </span>
+        </Card>
+      )}
       <Card className="overflow-x-auto">
         <table className="tnum w-full min-w-[900px] font-mono text-xs">
           <thead className="bg-surface-2">
@@ -190,7 +219,7 @@ export function GameLinesTab({
             </tr>
           </thead>
           <tbody>
-            {games.map((g) => (
+            {shown.map((g) => (
               <>
               <tr key={g.eventId} className="border-b border-line/60 transition-colors hover:bg-surface-2">
                 <td className="px-3.5 py-2 font-sans text-[13px]">

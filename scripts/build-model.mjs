@@ -303,6 +303,35 @@ async function fetchRosterMap(season) {
   }
 }
 
+// --- Depth charts ---------------------------------------------------------------
+// Latest published depth rank per player (1 = starter). Governs who projects
+// as QB1 and damps usage for players buried on the chart.
+async function fetchDepthMap(season) {
+  try {
+    const rows = await fetchCsv(
+      `https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_${season}.csv`,
+    );
+    const latest = {};
+    for (const r of rows) {
+      if (!["QB", "RB", "WR", "TE"].includes(r.pos_abb)) continue;
+      if (!r.gsis_id) continue;
+      const rank = Number(r.pos_rank) || 9;
+      const prev = latest[r.gsis_id];
+      // Keep the newest snapshot (rows are dated); ties keep best rank.
+      if (!prev || r.dt > prev.dt || (r.dt === prev.dt && rank < prev.rank)) {
+        latest[r.gsis_id] = { dt: r.dt, rank };
+      }
+    }
+    const map = {};
+    for (const [id, v] of Object.entries(latest)) map[id] = v.rank;
+    console.log(`  depth charts ${season}: ${Object.keys(map).length} players ranked`);
+    return map;
+  } catch (e) {
+    console.warn(`  ! depth charts unavailable (${e.message})`);
+    return null;
+  }
+}
+
 // --- Player usage layer (for prop projections / SGP studio) -------------------
 // Per-player per-game rates + team per-game volume, so runtime can compute
 // usage SHARES and back player lines out of the game model's team totals.
@@ -339,7 +368,7 @@ async function seasonPlayerRates(season) {
   return out;
 }
 
-function buildPlayerTable(perSeason, rosterMap) {
+function buildPlayerTable(perSeason, rosterMap, depthMap) {
   const ids = new Set();
   for (const s of PLAYER_SEASONS) for (const id of Object.keys(perSeason[s] ?? {})) ids.add(id);
   const KEYS = ["passAtt", "passYds", "passTds", "carries", "rushYds", "targets", "rec", "recYds", "recTds"];
@@ -353,7 +382,7 @@ function buildPlayerTable(perSeason, rosterMap) {
       if (!rosterMap[id]) continue;
       team = rosterMap[id];
     }
-    const blended = { id, name: latest.name, pos: latest.pos, team, g: 0 };
+    const blended = { id, name: latest.name, pos: latest.pos, team, g: 0, depth: depthMap?.[id] ?? null };
     let wSum = 0;
     for (const s of PLAYER_SEASONS) {
       const r = perSeason[s]?.[id];
@@ -473,11 +502,12 @@ const { blended, leagueMean } = blendAndShrink(perSeason);
 const perSeasonQb = {};
 for (const s of SEASONS) perSeasonQb[s] = await seasonQbRates(s);
 const rosterMap = await fetchRosterMap(TARGET_SEASON);
+const depthMap = await fetchDepthMap(TARGET_SEASON);
 const qbs = buildQbTable(perSeasonQb, rosterMap);
 
 const perSeasonPlayers = {};
 for (const s of PLAYER_SEASONS) perSeasonPlayers[s] = await seasonPlayerRates(s);
-const players = buildPlayerTable(perSeasonPlayers, rosterMap);
+const players = buildPlayerTable(perSeasonPlayers, rosterMap, depthMap);
 
 const experts = await fetchFpi();
 

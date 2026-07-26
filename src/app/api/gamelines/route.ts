@@ -6,6 +6,7 @@ import {
   eloToPts,
   probMarginOver,
   qbPassOffDelta,
+  SCHEDULE,
 } from "@/lib/engine/gameModel";
 import { americanToDecimal, americanToImplied } from "@/lib/engine/odds";
 import type { DecidedGame, EngineOptions, RatingAdjustment } from "@/lib/engine/types";
@@ -50,6 +51,9 @@ export async function POST(req: Request) {
       engine.units,
     );
 
+    // NFL week for each matchup (each ordered home|away pair is unique).
+    const weekOf = new Map(SCHEDULE.map((s) => [`${s.home}|${s.away}`, s.week]));
+
     const lines = await getGameLines();
     const games = (lines?.games ?? []).map((g) => {
       const h = index[g.homeId];
@@ -85,6 +89,7 @@ export async function POST(req: Request) {
       return {
         eventId: g.eventId,
         commence: g.commence,
+        week: weekOf.get(`${g.homeId}|${g.awayId}`) ?? null,
         homeId: g.homeId,
         awayId: g.awayId,
         modelPHome,
