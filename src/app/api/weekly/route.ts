@@ -77,6 +77,11 @@ export async function POST(req: Request) {
     // Build the leg pool: best model-vs-price leg(s) per game.
     const legs: WeeklyLeg[] = [];
     const teaserLegs: { gameKey: string; label: string; prob: number }[] = [];
+    const matchups: {
+      gameKey: string; homeId: string; awayId: string; pHome: number;
+      muHome: number; muAway: number; modelLine: number;
+      fdSpread: number | null; fdTotal: number | null;
+    }[] = [];
     for (const g of slate) {
       const h = index[g.homeId];
       const a = index[g.awayId];
@@ -86,6 +91,19 @@ export async function POST(req: Request) {
       const fd = g.books.find((b) => b.book === "fanduel");
       if (!fd) continue;
       const gameKey = `${g.awayId}@${g.homeId}`;
+      // Matchup context: model expected score from league total + margin.
+      const LG_TOTAL = 44.8;
+      matchups.push({
+        gameKey,
+        homeId: g.homeId,
+        awayId: g.awayId,
+        pHome,
+        muHome: (LG_TOTAL + margin) / 2,
+        muAway: (LG_TOTAL - margin) / 2,
+        modelLine: -margin, // home-relative spread the model would set
+        fdSpread: fd.spreadHome,
+        fdTotal: fd.totalLine,
+      });
       const push = (label: string, kind: "ml" | "spread", price: number | null, prob: number) => {
         if (price == null) return;
         const decimal = americanToDecimal(price);
@@ -114,9 +132,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // Parlays: one leg max per game; search top-EV legs for best combos.
+    // Parlays: one leg max per game, bucketed by size so the UI can offer a
+    // leg-count picker with ranked options per size.
     const pool = [...legs].sort((a, b) => b.ev - a.ev).slice(0, 14);
-    const parlays: { legs: string[]; prob: number; decimal: number; american: number; ev: number }[] = [];
+    const bySize: Record<number, { legs: string[]; prob: number; american: number; ev: number }[]> = { 2: [], 3: [], 4: [], 5: [] };
     const combo = (chosen: WeeklyLeg[], start: number) => {
       if (chosen.length >= 2) {
         let prob = 1;
@@ -125,10 +144,9 @@ export async function POST(req: Request) {
           prob *= l.prob;
           dec *= l.decimal;
         }
-        parlays.push({
+        bySize[chosen.length].push({
           legs: chosen.map((l) => l.label),
           prob,
-          decimal: dec,
           american: probToAmerican(1 / dec),
           ev: prob * dec - 1,
         });
@@ -140,38 +158,46 @@ export async function POST(req: Request) {
       }
     };
     combo([], 0);
-    parlays.sort((a, b) => b.ev - a.ev);
+    for (const k of Object.keys(bySize)) {
+      bySize[Number(k)].sort((a, b) => b.ev - a.ev);
+      bySize[Number(k)] = bySize[Number(k)].slice(0, 6);
+    }
 
-    // Teasers: top legs by teased win prob, standard payouts.
+    // Teasers: enumerate combos of the strongest teased legs (one per game),
+    // multiple ranked options per team-count.
     teaserLegs.sort((a, b) => b.prob - a.prob);
-    const teasers = [2, 3, 4]
-      .map((n) => {
-        const picked: typeof teaserLegs = [];
-        for (const l of teaserLegs) {
-          if (picked.some((p) => p.gameKey === l.gameKey)) continue;
-          picked.push(l);
-          if (picked.length === n) break;
-        }
-        if (picked.length < n) return null;
-        const prob = picked.reduce((a, l) => a * l.prob, 0 + 1);
-        const dec = americanToDecimal(TEASER_PAYOUT[n]);
-        return {
-          n,
-          payout: TEASER_PAYOUT[n],
-          legs: picked.map((l) => l.label),
+    const tPool = teaserLegs.slice(0, 10);
+    const teaserOptions: Record<number, { legs: string[]; prob: number; payout: number; ev: number }[]> = { 2: [], 3: [], 4: [] };
+    const tCombo = (chosen: typeof tPool, start: number) => {
+      if (chosen.length >= 2 && chosen.length <= 4) {
+        const prob = chosen.reduce((a, l) => a * l.prob, 1);
+        const dec = americanToDecimal(TEASER_PAYOUT[chosen.length]);
+        teaserOptions[chosen.length].push({
+          legs: chosen.map((l) => l.label),
           prob,
+          payout: TEASER_PAYOUT[chosen.length],
           ev: prob * dec - 1,
-        };
-      })
-      .filter(Boolean);
+        });
+      }
+      if (chosen.length >= 4) return;
+      for (let i = start; i < tPool.length; i++) {
+        if (chosen.some((c) => c.gameKey === tPool[i].gameKey)) continue;
+        tCombo([...chosen, tPool[i]], i + 1);
+      }
+    };
+    tCombo([], 0);
+    for (const k of Object.keys(teaserOptions)) {
+      teaserOptions[Number(k)].sort((a, b) => b.ev - a.ev);
+      teaserOptions[Number(k)] = teaserOptions[Number(k)].slice(0, 6);
+    }
 
     return NextResponse.json({
       weeks,
       week,
+      matchups: matchups.sort((a, b) => b.pHome * (1 - b.pHome) - a.pHome * (1 - a.pHome)),
       legs: [...legs].sort((a, b) => b.ev - a.ev).slice(0, 12),
-      parlays: parlays.slice(0, 8),
-      teasers,
-      teaserLegs: teaserLegs.slice(0, 10),
+      parlaysBySize: bySize,
+      teaserOptions,
     });
   } catch (err) {
     return NextResponse.json(
