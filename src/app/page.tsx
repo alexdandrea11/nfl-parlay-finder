@@ -25,15 +25,17 @@ import { ModelTab } from "./components/ModelTab";
 import { PortfolioTab } from "./components/PortfolioTab";
 import { StreetTab } from "./components/StreetTab";
 import { TeamsTab } from "./components/TeamsTab";
+import { WeeklyTab } from "./components/WeeklyTab";
 import { LiveDot } from "./components/ui";
 
 type Tab =
-  | "find" | "builder" | "games" | "gauntlet" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
+  | "find" | "builder" | "games" | "weekly" | "gauntlet" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
   { key: "builder", label: "Builder" },
   { key: "games", label: "Game Lines" },
+  { key: "weekly", label: "Weekly Bets" },
   { key: "gauntlet", label: "Gauntlet" },
   { key: "teams", label: "Teams" },
   { key: "scenarios", label: "Scenarios" },
@@ -321,6 +323,9 @@ export default function Home() {
             customBoard={customBoard}
             onAddTickets={(t) => setTickets([...tickets, ...t])}
           />
+        )}
+        {tab === "weekly" && (
+          <WeeklyTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
         )}
         {tab === "gauntlet" && (
           <GauntletTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
