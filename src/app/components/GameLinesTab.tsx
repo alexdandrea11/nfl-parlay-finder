@@ -198,7 +198,8 @@ export function GameLinesTab({
             </button>
           ))}
           <span className="tnum ml-2 font-mono text-[11px] text-ink-3">
-            {shown.length} games
+            {shown.length} games · books have posted lines through week {weeks[weeks.length - 1]} —
+            more weeks appear automatically as they're released
           </span>
         </Card>
       )}
@@ -366,17 +367,32 @@ export function GameLinesTab({
                             <span className="tnum rounded-lg bg-bg px-3 py-1.5 font-mono text-sm font-bold text-ink">
                               {g.homeId} {studio.muHome.toFixed(0)} — {studio.muAway.toFixed(0)} {g.awayId}
                             </span>
-                            <span className="text-[11px] text-ink-3">
-                              model expected score{!studio.liveProps && " · FanDuel prop lines not posted yet — projections only"}
-                            </span>
+                            <span className="text-[11px] text-ink-3">model expected score</span>
                           </div>
+                          {!studio.liveProps && (
+                            <div className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-[12px] leading-relaxed text-ink-2">
+                              <b className="text-brand">No suggested parlays yet:</b> FanDuel hasn't
+                              posted player prop lines for this game (they appear during game week).
+                              Once they do, this panel shows <b>suggested SGP combos ranked best-first</b>{" "}
+                              and every prop graded against our projection. Below are the raw player
+                              projections those will be built from — individual estimates, not parlays.
+                            </div>
+                          )}
                           {studio.suggestions.length > 0 && (
                             <div>
-                              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">Suggested combos</p>
+                              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">
+                                Suggested same-game parlays · best first
+                              </p>
                               <div className="grid gap-1.5 md:grid-cols-3">
-                                {studio.suggestions.map((s) => (
-                                  <div key={s.name} className="rounded-lg border border-warn/25 bg-bg p-2.5">
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-warn">{s.name}</p>
+                                {studio.suggestions.map((s, si) => (
+                                  <div
+                                    key={s.name}
+                                    className={`rounded-lg border bg-bg p-2.5 ${si === 0 ? "border-warn/70" : "border-warn/25"}`}
+                                  >
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-warn">
+                                      {si === 0 && "⭐ "}
+                                      {s.name}
+                                    </p>
                                     <p className="mt-1 text-xs leading-relaxed text-ink">{s.legs.join(" + ")}</p>
                                     <p className="tnum mt-1 font-mono text-[11px] text-ink-2">
                                       {(s.jointProb * 100).toFixed(1)}% to hit · fair {s.fairAmerican > 0 ? "+" : ""}{s.fairAmerican}
@@ -420,14 +436,41 @@ export function GameLinesTab({
                             </div>
                           )}
                           <div>
-                            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">Model projections</p>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 md:grid-cols-4">
-                              {studio.projections.slice(0, 16).map((p) => (
-                                <span key={p.name} className="tnum font-mono text-[10px] text-ink-2">
-                                  <span className="text-ink-3">{p.team}</span> {p.name.split(" ").slice(-1)[0]}:{" "}
-                                  {p.projPassYds ? `${p.projPassYds} pass` : p.projRecYds ? `${p.projRecYds} rec` : `${p.projRushYds} rush`}
-                                </span>
-                              ))}
+                            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">
+                              Player projections (individual estimates, not parlays)
+                            </p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {[g.homeId, g.awayId].map((teamId) => {
+                                const rows = studio.projections
+                                  .filter((p) => p.team === teamId)
+                                  .map((p) => ({
+                                    ...p,
+                                    yds: p.projPassYds ?? p.projRecYds ?? p.projRushYds ?? 0,
+                                    kind: p.projPassYds ? "pass yds" : p.projRecYds ? "rec yds" : "rush yds",
+                                  }))
+                                  .sort((a, b) => b.yds - a.yds)
+                                  .slice(0, 8);
+                                return (
+                                  <div key={teamId} className="rounded-lg bg-bg p-3">
+                                    <p className="mb-1.5 border-b border-line pb-1 text-xs font-bold text-ink">
+                                      {teamId}
+                                      <span className="tnum ml-2 font-mono text-[10px] font-medium text-ink-3">
+                                        projected {(teamId === g.homeId ? studio.muHome : studio.muAway).toFixed(0)} pts
+                                      </span>
+                                    </p>
+                                    {rows.map((p) => (
+                                      <div key={p.name} className="flex items-center justify-between py-0.5 text-xs">
+                                        <span className="text-ink-2">
+                                          {p.name} <span className="text-[9px] uppercase text-ink-3">{p.pos}</span>
+                                        </span>
+                                        <span className="tnum font-mono text-ink">
+                                          {p.yds.toFixed(0)} <span className="text-ink-3">{p.kind}</span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
