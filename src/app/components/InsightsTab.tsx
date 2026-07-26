@@ -288,9 +288,25 @@ function Timeline({ history, metric }: { history: HistoryPoint[]; metric: "po" |
   const pad = 30;
   const t0 = history[0].ts;
   const t1 = latest.ts;
-  const maxV = metric === "w" ? 17 : Math.max(...history.flatMap((h) => teams.map((id) => h.teams[id]?.[metric] ?? 0))) * 1.15;
+  // Zoom the y-axis to the data range so drift is visible (a 0-based axis
+  // flattens everything preseason).
+  const vals = history.flatMap((h) => teams.map((id) => h.teams[id]?.[metric] ?? 0));
+  const vMax = Math.max(...vals);
+  const vMin = Math.min(...vals);
+  const span = Math.max(vMax - vMin, metric === "w" ? 1 : 0.04);
+  const yTop = vMax + span * 0.15;
+  const yBot = Math.max(0, vMin - span * 0.15);
   const x = (ts: number) => pad + ((ts - t0) / Math.max(1, t1 - t0)) * (W - 2 * pad);
-  const y = (v: number) => H - pad - (v / maxV) * (H - 2 * pad);
+  const y = (v: number) => H - pad - ((v - yBot) / (yTop - yBot)) * (H - 2 * pad);
+  // De-overlap the end labels: sort by position, enforce 11px separation.
+  const labelYs = new Map<string, number>();
+  teams
+    .map((id) => ({ id, ly: y(latest.teams[id][metric]) }))
+    .sort((a, b) => a.ly - b.ly)
+    .forEach((e, i, arr) => {
+      const minY = i === 0 ? e.ly : Math.max(e.ly, (labelYs.get(arr[i - 1].id) ?? 0) + 11);
+      labelYs.set(e.id, minY);
+    });
   return (
     <div className="mt-3 overflow-x-auto">
       <svg viewBox={`0 0 ${W} ${H}`} className="min-w-[560px] rounded-lg border border-line bg-bg" role="img">
@@ -304,12 +320,12 @@ function Timeline({ history, metric }: { history: HistoryPoint[]; metric: "po" |
               <polyline points={pts} fill="none" stroke={LINE_COLORS[ti]} strokeWidth={2} />
               <text
                 x={W - pad + 4}
-                y={y(latest.teams[id][metric]) + 3}
+                y={(labelYs.get(id) ?? y(latest.teams[id][metric])) + 3}
                 fontSize={9}
                 fill={LINE_COLORS[ti]}
                 className="font-mono"
               >
-                {id}
+                {id} {metric === "w" ? latest.teams[id][metric].toFixed(1) : `${(latest.teams[id][metric] * 100).toFixed(0)}%`}
               </text>
             </g>
           );
