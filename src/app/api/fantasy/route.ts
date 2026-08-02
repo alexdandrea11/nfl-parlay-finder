@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEngine } from "@/lib/engine/engineCache";
-import { draftPlan, fantasyProjections, type Scoring } from "@/lib/engine/fantasy";
+import { draftPlan, fantasyProjections, weekProjections, type Scoring } from "@/lib/engine/fantasy";
 import type { DecidedGame, EngineOptions, RatingAdjustment } from "@/lib/engine/types";
 
 export const runtime = "nodejs";
@@ -27,7 +27,18 @@ export async function POST(req: Request) {
     const engine = await getEngine(options);
     const rows = fantasyProjections(scoring, engine.units);
     const picks = draftPlan(rows, Math.min(slot, teams), teams, rounds);
-    return NextResponse.json({ scoring, slot: Math.min(slot, teams), teams, rounds, rows: rows.slice(0, 200), picks });
+    const week = body.week == null ? null : Math.min(18, Math.max(1, Math.round(Number(body.week))));
+    const weekProj = week != null ? weekProjections(scoring, week, engine.units) : null;
+    return NextResponse.json({
+      scoring,
+      slot: Math.min(slot, teams),
+      teams,
+      rounds,
+      rows: rows.slice(0, 250),
+      picks,
+      week,
+      weekProj,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "fantasy failed" },

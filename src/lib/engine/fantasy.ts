@@ -10,7 +10,7 @@ import type { PlayerRates } from "./props";
 
 const PLAYERS = (model as unknown as {
   players: {
-    byTeam: Record<string, (PlayerRates & { passTds: number; rushTds: number; recTds: number })[]>;
+    byTeam: Record<string, (PlayerRates & { passTds: number; rushTds: number; recTds: number; rookie?: boolean; draftRound?: number })[]>;
     teamPerGame: Record<string, { passYds: number; rushYds: number; passAtt: number; carries: number }>;
   };
 }).players;
@@ -27,6 +27,7 @@ export interface FantasyRow {
   season: number;
   vorp: number;
   posRank: number;
+  rookie: boolean;
 }
 
 const REPLACEMENT_RANK: Record<string, number> = { QB: 13, RB: 25, WR: 25, TE: 13 };
@@ -104,6 +105,7 @@ export function fantasyProjections(
         season: Math.round(season),
         vorp: 0,
         posRank: 0,
+        rookie: Boolean(p.rookie),
       });
     }
   }
@@ -122,6 +124,54 @@ export function fantasyProjections(
     for (const r of list) r.vorp = Math.round(r.season - repl);
   }
   return rows;
+}
+
+export interface WeekProj {
+  pts: number;
+  opp: string;
+  home: boolean;
+}
+
+/** Per-player fantasy points for ONE week's actual matchup. */
+export function weekProjections(
+  scoring: Scoring,
+  week: number,
+  units?: Record<string, UnitProfile> | null,
+): Record<string, WeekProj> {
+  const lg = leagueMean();
+  const recPt = scoring === "ppr" ? 1 : scoring === "half" ? 0.5 : 0;
+  const out: Record<string, WeekProj> = {};
+  for (const g of SCHEDULE) {
+    if (g.week !== week) continue;
+    for (const [teamId, oppId, home] of [
+      [g.home, g.away, true],
+      [g.away, g.home, false],
+    ] as [string, string, boolean][]) {
+      const mu = expectedPoints(teamId, oppId, units) + (home ? 0.82 : -0.82);
+      const opp = units?.[oppId] ?? unitsFor(oppId);
+      const scoreF = 0.55 + 0.45 * (mu / 22.6);
+      const passF = scoreF * Math.min(1.22, Math.max(0.78, 1 + 1.8 * (opp.passDef - lg.passDef)));
+      const rushF = scoreF * Math.min(1.22, Math.max(0.78, 1 + 2.2 * (opp.rushDef - lg.rushDef)));
+      const roster = PLAYERS.byTeam[teamId] ?? [];
+      const qbs = roster.filter((p) => p.pos === "QB");
+      const qb1 =
+        qbs.find((p) => p.depth === 1) ??
+        qbs.reduce((a, b) => (b.passAtt > (a?.passAtt ?? 0) ? b : a), qbs[0]);
+      for (const p of roster) {
+        const df = depthF(p.depth);
+        const isQb1 = p.id === qb1?.id;
+        const pts =
+          (isQb1 ? p.passYds * passF * 0.04 + p.passTds * passF * 4 : 0) +
+          p.rushYds * rushF * (p.pos === "QB" ? (isQb1 ? 1 : 0) : df) * 0.1 +
+          (p.rushTds ?? 0) * rushF * (p.pos === "QB" ? (isQb1 ? 1 : 0) : df) * 6 +
+          p.rec * passF * df * recPt +
+          p.recYds * passF * df * 0.1 +
+          (p.recTds ?? 0) * passF * df * 6;
+        out[p.id] = { pts: Math.round(pts * 10) / 10, opp: oppId, home };
+      }
+    }
+  }
+  return out;
 }
 
 export interface DraftPick {

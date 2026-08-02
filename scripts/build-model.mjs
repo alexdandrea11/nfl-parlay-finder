@@ -332,6 +332,43 @@ async function fetchDepthMap(season) {
   }
 }
 
+// --- Rookies via draft capital --------------------------------------------------
+// No NFL stats exist for rookies, and college-stat translation is noisy; the
+// best public year-1 predictor is DRAFT CAPITAL. Empirical per-game rookie
+// rates by position, scaled by round.
+const ROOKIE_BASE = {
+  QB: { passAtt: 29, passYds: 205, passTds: 1.15, carries: 4.5, rushYds: 18, rushTds: 0.15, targets: 0, rec: 0, recYds: 0, recTds: 0 },
+  RB: { passAtt: 0, passYds: 0, passTds: 0, carries: 12.5, rushYds: 54, rushTds: 0.42, targets: 3.1, rec: 2.4, recYds: 18, recTds: 0.07 },
+  WR: { passAtt: 0, passYds: 0, passTds: 0, carries: 0.4, rushYds: 2.5, rushTds: 0.01, targets: 6.4, rec: 4.1, recYds: 53, recTds: 0.32 },
+  TE: { passAtt: 0, passYds: 0, passTds: 0, carries: 0, rushYds: 0, rushTds: 0, targets: 3.9, rec: 2.7, recYds: 28, recTds: 0.22 },
+};
+const ROOKIE_ROUND_MULT = { 1: 1.0, 2: 0.72, 3: 0.5, 4: 0.3, 5: 0.22, 6: 0.16, 7: 0.12 };
+
+async function fetchRookies(season, rosterMap, depthMap) {
+  try {
+    const rows = await fetchCsv(
+      "https://github.com/nflverse/nflverse-data/releases/download/draft_picks/draft_picks.csv",
+    );
+    const out = [];
+    for (const r of rows) {
+      if (Number(r.season) !== season) continue;
+      if (!["QB", "RB", "WR", "TE"].includes(r.position)) continue;
+      const team = rosterMap?.[r.gsis_id] ?? mapCode(r.team);
+      if (!DIVISIONS[team]) continue;
+      const base = ROOKIE_BASE[r.position];
+      const mult = ROOKIE_ROUND_MULT[Number(r.round)] ?? 0.1;
+      const p = { id: r.gsis_id || `rk-${r.season}-${r.pick}`, name: r.pfr_player_name, pos: r.position, team, g: 14, rookie: true, draftRound: Number(r.round), depth: depthMap?.[r.gsis_id] ?? null };
+      for (const [k, v] of Object.entries(base)) p[k] = Math.round(v * mult * 100) / 100;
+      out.push(p);
+    }
+    console.log(`  rookies ${season}: ${out.length} synthesized from draft capital`);
+    return out;
+  } catch (e) {
+    console.warn(`  ! draft picks unavailable (${e.message})`);
+    return [];
+  }
+}
+
 // --- Player usage layer (for prop projections / SGP studio) -------------------
 // Per-player per-game rates + team per-game volume, so runtime can compute
 // usage SHARES and back player lines out of the game model's team totals.
@@ -509,6 +546,16 @@ const qbs = buildQbTable(perSeasonQb, rosterMap);
 const perSeasonPlayers = {};
 for (const s of PLAYER_SEASONS) perSeasonPlayers[s] = await seasonPlayerRates(s);
 const players = buildPlayerTable(perSeasonPlayers, rosterMap, depthMap);
+// Fold in rookies (draft-capital rates); re-trim each team to 14.
+const rookies = await fetchRookies(TARGET_SEASON, rosterMap, depthMap);
+for (const rk of rookies) {
+  const list = (players.byTeam[rk.team] ??= []);
+  if (!list.some((p) => p.id === rk.id)) list.push(rk);
+}
+for (const t of Object.keys(players.byTeam)) {
+  players.byTeam[t].sort((a, b) => b.passAtt + b.carries + b.targets - (a.passAtt + a.carries + a.targets));
+  players.byTeam[t] = players.byTeam[t].slice(0, 14);
+}
 
 const experts = await fetchFpi();
 

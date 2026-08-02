@@ -221,3 +221,10 @@ export function saveLS(key: string, value: unknown) {
     // ignore quota errors
   }
 }
+
+/** A saved fantasy roster (multiple leagues supported). */
+export interface FantasyRoster {
+  id: string;
+  name: string;
+  playerIds: string[];
+}

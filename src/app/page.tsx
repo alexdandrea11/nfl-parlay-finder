@@ -6,6 +6,7 @@ import {
   saveLS,
   type Adjustment,
   type CustomBoard,
+  type FantasyRoster,
   type OddsMeta,
   type QbInfo,
   type QbOverrides,
@@ -73,6 +74,7 @@ export default function Home() {
     loadLS("nfl-price-board", {}),
   );
   const [autoSync, setAutoSyncRaw] = useState<boolean>(() => loadLS("nfl-auto-sync", true));
+  const [rosters, setRostersRaw] = useState<FantasyRoster[]>(() => loadLS("nfl-fantasy-rosters", []));
   const [freshness, setFreshness] = useState<{
     seasonStatsWeek: number | null;
     seasonStatsFetchedAt: number | null;
@@ -98,6 +100,10 @@ export default function Home() {
   const setCustomBoard = (b: CustomBoard) => {
     setCustomBoardRaw(b);
     saveLS("nfl-price-board", b);
+  };
+  const setRosters = (r: FantasyRoster[]) => {
+    setRostersRaw(r);
+    saveLS("nfl-fantasy-rosters", r);
   };
   const setAutoSync = (v: boolean) => {
     setAutoSyncRaw(v);
@@ -330,7 +336,13 @@ export default function Home() {
           <WeeklyTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
         )}
         {tab === "fantasy" && (
-          <FantasyTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
+          <FantasyTab
+            adjustments={adjustments}
+            decidedGames={decidedGames}
+            qbOverrides={qbOverrides}
+            rosters={rosters}
+            setRosters={setRosters}
+          />
         )}
         {tab === "gauntlet" && (
           <GauntletTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
