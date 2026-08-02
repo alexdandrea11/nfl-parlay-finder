@@ -14,6 +14,7 @@ import {
   type TeamMeta,
 } from "./clientTypes";
 import { BuilderTab } from "./components/BuilderTab";
+import { FantasyTab } from "./components/FantasyTab";
 import { FindTab, type DecidedGame } from "./components/FindTab";
 import { GameLinesTab } from "./components/GameLinesTab";
 import { GauntletTab } from "./components/GauntletTab";
@@ -29,13 +30,14 @@ import { WeeklyTab } from "./components/WeeklyTab";
 import { LiveDot } from "./components/ui";
 
 type Tab =
-  | "find" | "builder" | "games" | "weekly" | "gauntlet" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
+  | "find" | "builder" | "games" | "weekly" | "fantasy" | "gauntlet" | "teams" | "scenarios" | "insights" | "street" | "lines" | "portfolio" | "model" | "guide";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "find", label: "Find Parlays" },
   { key: "builder", label: "Builder" },
   { key: "games", label: "Game Lines" },
   { key: "weekly", label: "Weekly Bets" },
+  { key: "fantasy", label: "Fantasy" },
   { key: "gauntlet", label: "Gauntlet" },
   { key: "teams", label: "Teams" },
   { key: "scenarios", label: "Scenarios" },
@@ -326,6 +328,9 @@ export default function Home() {
         )}
         {tab === "weekly" && (
           <WeeklyTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
+        )}
+        {tab === "fantasy" && (
+          <FantasyTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />
         )}
         {tab === "gauntlet" && (
           <GauntletTab adjustments={adjustments} decidedGames={decidedGames} qbOverrides={qbOverrides} />

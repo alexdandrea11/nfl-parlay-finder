@@ -359,6 +359,7 @@ async function seasonPlayerRates(season) {
       passTds: (Number(r.passing_tds) || 0) / g,
       carries: (Number(r.carries) || 0) / g,
       rushYds: (Number(r.rushing_yards) || 0) / g,
+      rushTds: (Number(r.rushing_tds) || 0) / g,
       targets: (Number(r.targets) || 0) / g,
       rec: (Number(r.receptions) || 0) / g,
       recYds: (Number(r.receiving_yards) || 0) / g,
@@ -371,7 +372,7 @@ async function seasonPlayerRates(season) {
 function buildPlayerTable(perSeason, rosterMap, depthMap) {
   const ids = new Set();
   for (const s of PLAYER_SEASONS) for (const id of Object.keys(perSeason[s] ?? {})) ids.add(id);
-  const KEYS = ["passAtt", "passYds", "passTds", "carries", "rushYds", "targets", "rec", "recYds", "recTds"];
+  const KEYS = ["passAtt", "passYds", "passTds", "carries", "rushYds", "rushTds", "targets", "rec", "recYds", "recTds"];
   const byTeam = {};
   for (const id of ids) {
     const latest = perSeason[2025]?.[id] ?? perSeason[2024]?.[id];
